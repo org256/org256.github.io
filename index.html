@@ -9,6 +9,7 @@
     <button type="button" id="take_photo">Take Photo</button>
     <button type="button" id="playback">Playback</button>
     <button type="button" id="flip">Flip Camera</button>
+    <select id="videoSource"></select>
 </div>
 <video autoplay playsinline></video>
 <img src="">
@@ -48,6 +49,23 @@ function snapshot() {
 }
 
   take_photo.addEventListener("click", snapshot, false);
+
+    video.addEventListener("playing", () => {
+        console.log(video.videoWidth);
+        console.log(video.videoHeight);
+    });
+
+    navigator.mediaDevices.enumerateDevices().then(function (devices) {
+            for(var i = 0; i < devices.length; i ++){
+                var device = devices[i];
+                if (device.kind === 'videoinput') {
+                    var option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || 'camera ' + (i + 1);
+                    document.querySelector('select#videoSource').appendChild(option);
+                }
+            };
+        });
 
 function setup_camera() {
     const constraints = {
