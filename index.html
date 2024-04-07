@@ -68,14 +68,15 @@ function snapshot() {
         });
 
 function setup_camera() {
-    console.log(document.querySelector("select#videoSource").value);
+    var deviceId = document.querySelector("select#videoSource").value;
+    console.log(deviceId);
     const constraints = {
-       video: {
+        video: {
             video: true,
             audio: false,
 //            facingMode: front ? "user" : "environment"
+            deviceId: { exact: deviceId }
         },
-        deviceId: document.querySelector("select#videoSource").value
     };
 
     navigator.mediaDevices.getUserMedia(constraints).then(
