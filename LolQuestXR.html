@@ -16,8 +16,24 @@ canvas{display:block}
 #quests:empty{display:none}
 #mute{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 74px);padding:6px 12px;border:0;border-radius:10px;background:var(--panel);color:#fff;font-size:13px;cursor:pointer}
 body.vr #hud,body.vr #quests,body.vr #msg,body.vr #help,body.vr #mute{display:none!important}
+#touch{display:none;position:fixed;inset:0;pointer-events:none;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+body.touch #touch{display:block}
+#joyzone{position:absolute;left:0;bottom:0;width:50%;height:65%;pointer-events:auto;touch-action:none}
+#joy{position:absolute;left:28px;bottom:calc(env(safe-area-inset-bottom,0px) + 40px);width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.18);border:3px solid rgba(255,255,255,.5);pointer-events:none}
+#knob{position:absolute;left:35px;top:35px;width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.55)}
+#touch .tb{position:absolute;border-radius:50%;display:flex;align-items:center;justify-content:center;pointer-events:auto;touch-action:none;background:rgba(240,144,42,.8);border:4px solid rgba(255,255,255,.8);color:#fff}
+#touch .tb.on{transform:scale(.92);filter:brightness(1.25)}
+#bAtk{right:28px;bottom:calc(env(safe-area-inset-bottom,0px) + 50px);width:104px;height:104px;font-size:44px}
+#bRoll{right:150px;bottom:calc(env(safe-area-inset-bottom,0px) + 40px);width:62px;height:62px;font-size:26px;background:rgba(60,140,220,.8)}
+#bUse{right:48px;bottom:calc(env(safe-area-inset-bottom,0px) + 170px);width:62px;height:62px;font-size:26px;background:rgba(80,180,90,.8)}
+body.touch #help{display:none}
+body.touch #hud,body.touch #msg,body.touch #quests{pointer-events:none}
+body.touch #vr{right:auto;left:50%;transform:translateX(-50%);padding:8px 14px;font-size:13px}
+body.touch #mute{right:auto;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 58px)}
+body.touch #msg{bottom:calc(env(safe-area-inset-bottom,0px) + 110px)}
+body.vr #touch{display:none!important}
 </style></head><body>
-<div id="hud"></div><div id="quests"></div><div id="msg"></div><button id="mute">♪ Music: on</button>
+<div id="hud"></div><div id="quests"></div><div id="touch"><div id="joyzone"></div><div id="joy"><div id="knob"></div></div><div class="tb" id="bAtk">⚔️</div><div class="tb" id="bRoll">💨</div><div class="tb" id="bUse">💬</div></div><div id="msg"></div><button id="mute">♪ Music: on</button>
 <div id="help">Move: WASD / stick · Attack: Space / A / trigger · Roll: Shift / B / grip · Talk: E / X / A-B button</div>
 <button id="vr">Enter VR</button>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -422,6 +438,26 @@ function attack(){if(P.atk>0||P.roll>0)return;P.atk=.3;slash.visible=true;const 
     if(d<1.9*sc&&(dx*fx+dz*fz)/(d||1)>-.1){e.hp-=S.lvl+1;e.flash=.15;flashE(e,true);e.kx=dx/(d||1)*8;e.kz=dz/(d||1)*8;
       if(e.hp<=0){e.rt=15;e.m.visible=false;gain(e.d.xp,e.d.gold);progress('kill',e.type)}}}}
 
+// ---- Touch controls (Brawl Stars style): floating joystick on the left, attack / roll / talk buttons on the right.
+// Shown on touch devices; hidden once a keyboard or gamepad is used, and in VR.
+const TOUCH={x:0,z:0,a:false,r:false,u:false};
+(()=>{if(!((window.matchMedia&&matchMedia('(pointer:coarse)').matches)||('ontouchstart' in window)))return;
+  document.body.classList.add('touch');
+  const zone=$('joyzone'),base=$('joy'),knob=$('knob'),R=55;let jid=null,cx=0,cy=0;
+  function jm(e){let dx=e.clientX-cx,dy=e.clientY-cy;const d=Math.hypot(dx,dy);if(d>R){dx*=R/d;dy*=R/d}
+    knob.style.transform=`translate(${dx}px,${dy}px)`;const m=Math.min(d,R)/R;TOUCH.x=m<.15?0:dx/R;TOUCH.z=m<.15?0:dy/R}
+  zone.addEventListener('pointerdown',e=>{e.preventDefault();jid=e.pointerId;zone.setPointerCapture(jid);cx=e.clientX;cy=e.clientY;
+    base.style.left=(cx-65)+'px';base.style.top=(cy-65)+'px';jm(e)});
+  zone.addEventListener('pointermove',e=>{if(e.pointerId==jid)jm(e)});
+  const end=e=>{if(e.pointerId!=jid)return;jid=null;TOUCH.x=TOUCH.z=0;knob.style.transform='';base.style.left=base.style.top=''};
+  zone.addEventListener('pointerup',end);zone.addEventListener('pointercancel',end);
+  [['bAtk','a'],['bRoll','r'],['bUse','u']].forEach(([id,k])=>{const b=$(id);
+    b.addEventListener('pointerdown',e=>{e.preventDefault();TOUCH[k]=true;b.classList.add('on')});
+    const up=()=>{TOUCH[k]=false;b.classList.remove('on')};['pointerup','pointercancel','pointerleave'].forEach(ev=>b.addEventListener(ev,up))});
+  addEventListener('keydown',()=>{document.body.classList.remove('touch');TOUCH.x=TOUCH.z=0});
+  addEventListener('gamepadconnected',()=>document.body.classList.remove('touch'));
+})();
+
 // ---- Input (keyboard, standard gamepad / Xbox pad, WebXR controllers)
 const keys={},prev={};
 addEventListener('keydown',e=>{keys[e.code]=1;if(e.code=='Space')e.preventDefault()});addEventListener('keyup',e=>keys[e.code]=0);
@@ -436,7 +472,7 @@ function readInput(){
   const s=renderer.xr.getSession();
   if(s)for(const src of s.inputSources){const g=src.gamepad;if(!g)continue;const b=g.buttons.map(q=>q.pressed);
     x+=dz(g.axes[2]||0);z+=dz(g.axes[3]||0);a=a||b[0];r=r||b[1];u=u||b[4]||b[5]}
-  const m=Math.hypot(x,z);if(m>1){x/=m;z/=m}
+  x+=TOUCH.x;z+=TOUCH.z;a=a||TOUCH.a;r=r||TOUCH.r;u=u||TOUCH.u;const m=Math.hypot(x,z);if(m>1){x/=m;z/=m}
   return{x,z,a,r:edge('r',r),u:edge('u',u)}}
 
 // ---- HUD: DOM panels on desktop, two canvas boards in VR (stats/messages + quest board)
