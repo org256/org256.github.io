@@ -21,7 +21,11 @@ canvas{display:block}
 /* ===================== CUSTOMISE EVERYTHING HERE ===================== */
 const P_=(s,size,pos,color,extra)=>Object.assign({s,size,pos,color},extra||{});
 const CONFIG={
-  // ---- MAP: one character per tile. Edit rows freely; legend below defines each character.
+  start:'overworld',
+  // ---- MAPS: each has its own tiles (legend + ASCII rows), NPCs, enemies, items and portals.
+  // Map characters: one per tile. Legend sets colour, solid (blocks movement) and an optional model.
+  maps:{
+  overworld:{title:'Meadow Isle',bg:'#9bd4f5',
   legend:{
     '.':{color:'#5fae4e'}, ',':{color:'#4b9a3f'}, 's':{color:'#e6d08a'}, '=':{color:'#9b7b52'},
     '~':{color:'#3a7bd5',solid:true},                       // water (blocks movement)
@@ -52,26 +56,80 @@ const CONFIG={
 "~~ssss..........,,,,........ssssss~~",
 "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"],
   spawn:{x:18,y:11},                                        // tile coords
-  playerModel:'cat',
 
   // ---- NPCs (model, name, tile position, idle line)
   npcs:[
     {id:'mayor', name:'Mayor Whiskers', model:'villager', x:16,y:10, idle:'Stay safe out there, brave kitty!'},
     {id:'fisher',name:'Old Fisher',     model:'villager', x:3, y:19, idle:'The sea is calm today.'},
-    {id:'witch', name:'Hazel',          model:'villager', x:28,y:6,  idle:'Potions need patience.'}
+    {id:'witch', name:'Hazel',          model:'villager', x:28,y:6,  idle:'Potions need patience.'},
+    {id:'captain',name:'Captain Paws',model:'captain',x:3,y:3,idle:'Yarr, fine sea air today.'},
+    {id:'mama',name:'Mama Mittens',model:'cook',x:20,y:13,idle:'I hope Kit is not in trouble.'},
+    {id:'kit',name:'Kit',model:'kid',x:8,y:2,idle:'Hide and seek is fun!'}
   ],
-  // ---- Enemy types and where they spawn
-  enemies:{
-    slime:{model:'slime',hp:3, dmg:1,speed:1.6,xp:6, gold:3, aggro:4.5},
-    bat:  {model:'bat',  hp:2, dmg:1,speed:3.2,xp:8, gold:4, aggro:6},
-    golem:{model:'golem',hp:12,dmg:3,speed:1.3,xp:40,gold:25,aggro:5,scale:1.3}
-  },
   enemySpawns:[
     {type:'slime',x:24,y:9},{type:'slime',x:26,y:12},{type:'slime',x:14,y:13},{type:'slime',x:9,y:17},
     {type:'bat',x:27,y:15},{type:'bat',x:8,y:6},{type:'golem',x:32,y:17}
   ],
   // ---- Collectable items (only appear while a quest needs them)
-  items:[{id:'fish',model:'fish',x:2,y:17},{id:'fish',model:'fish',x:5,y:20},{id:'fish',model:'fish',x:30,y:20}],
+  items:[{id:'fish',model:'fish',x:2,y:17},{id:'fish',model:'fish',x:5,y:20},{id:'fish',model:'fish',x:30,y:20},{id:'chest',model:'chest',x:2,y:2}],
+  // portals: x,y = tile, to = map name, optional toX,toY = landing tile (default: that map's spawn)
+  portals:[{x:3,y:13,to:'dungeon',color:0x9b5de5},{x:33,y:9,to:'maze',color:0x35c5ff}]
+  },
+  maze:{title:'Hedge Maze',bg:'#9bd4f5',
+  legend:{'.':{color:'#c9b27a'},'#':{color:'#c9b27a',solid:true,model:'hedge',fixed:true}},
+  map:[
+'#####################',
+'#.#.....#...........#',
+'#.###.#.#.#####.#####',
+'#...#.#.......#.....#',
+'###.#.#############.#',
+'#.#.#.#...#.......#.#',
+'#.#.###.#.#.#####.#.#',
+'#.#.....#...#.....#.#',
+'#.###########.#####.#',
+'#.......#...#...#...#',
+'#.#######.#.###.###.#',
+'#.........#.........#',
+'#####################'],
+  spawn:{x:1,y:1},npcs:[],
+  enemySpawns:[{type:'slime',x:18,y:3},{type:'slime',x:16,y:1},{type:'slime',x:19,y:5}],
+  items:[{id:'prize',model:'trophy',x:5,y:5}],
+  portals:[{x:1,y:1,to:'overworld',toX:33,toY:9,color:0x35c5ff}]
+  },
+  dungeon:{title:'Dungeon',bg:'#14141c',
+  legend:{'.':{color:'#3a3a48'},'#':{color:'#1e1e2a',solid:true,model:'wallblock',fixed:true}},
+  map:[
+'############################',
+'#.......###.......###......#',
+'#.......###.......###......#',
+'#..........................#',
+'#.......###.......###......#',
+'#.......###.......###......#',
+'#.......######.######......#',
+'###.##########.#########.###',
+'###.##########.#########.###',
+'###.########.......#####.###',
+'#........###.......###.....#',
+'#........###.......###.....#',
+'#........###...............#',
+'#........###.......###.....#',
+'#........###.......###.....#',
+'############################'],
+  spawn:{x:3,y:3},
+  npcs:[{id:'prisoner',name:'Prisoner',model:'prisoner',x:24,y:12,idle:'Please, get me out of here!'}],
+  enemySpawns:[{type:'skeleton',x:14,y:3},{type:'skeleton',x:23,y:3},{type:'skeleton',x:25,y:5},{type:'skeleton',x:14,y:12},{type:'skeleton',x:15,y:13},{type:'skeleton',x:4,y:12},{type:'skeleton',x:23,y:11}],
+  items:[],
+  portals:[{x:3,y:3,to:'overworld',toX:3,toY:13,color:0x9b5de5}]
+  }
+  },
+  // ---- Enemy types
+  enemies:{
+    slime:{model:'slime',hp:3, dmg:1,speed:1.6,xp:6, gold:3, aggro:4.5},
+    bat:  {model:'bat',  hp:2, dmg:1,speed:3.2,xp:8, gold:4, aggro:6},
+    golem:{model:'golem',hp:12,dmg:3,speed:1.3,xp:40,gold:25,aggro:5,scale:1.3},
+    skeleton:{model:'skeleton',hp:4,dmg:2,speed:2,xp:12,gold:6,aggro:4.5}
+  },
+  playerModel:'cat',
 
   // ---- QUESTS. type: kill{target,count} | collect{item,count} | talk{target,talkText} | reach{at:{x,y,r},where}
   // Turn in by talking to the giver again. 'requires' = id of a quest that must be finished first.
@@ -85,7 +143,15 @@ const CONFIG={
     {id:'q4',giver:'fisher',requires:'q2', title:'Scout the Shore', type:'reach', at:{x:31,y:4,r:2}, where:'the north-east shore', reward:{xp:30,gold:20},
      text:'Scout the north-east shore for me. Is it safe to fish?', done:'Good, the coast is clear.'},
     {id:'q5',giver:'mayor', requires:'q1', title:'Stone Menace', type:'kill', target:'golem', count:1, reward:{xp:80,gold:60},
-     text:'A golem roams the south-east. Defeat it!', done:'Legendary! You saved us all.'}
+     text:'A golem roams the south-east. Defeat it!', done:'Legendary! You saved us all.'},
+    {id:'q6',giver:'captain',title:'Buried Treasure',type:'collect',item:'chest',count:1,reward:{xp:35,gold:50},
+     text:'Arr! A treasure chest lies hidden on the north-west beach. Find it!',done:'Shiver me whiskers, the chest! Here is your share.'},
+    {id:'q7',giver:'mama',title:'Dinner Time',type:'talk',target:'kit',talkText:'Dinner is ready? Yay, I am coming home!',reward:{xp:20,gold:15},
+     text:'My son Kit wandered off again. Find him and tell him dinner is ready!',done:'Thank you for fetching him. Please take this.'},
+    {id:'q8',giver:'mayor',requires:'q1',title:'Free the Prisoner',type:'talk',target:'prisoner',map:'dungeon',talkText:'You freed me! Thank you, brave cat!',reward:{xp:60,gold:40},
+     text:'An innocent cat is locked in the dungeon. Step through the purple portal in the west, beat the skeletons and release the prisoner!',done:'Justice is served. Well done!'},
+    {id:'q9',giver:'witch',requires:'q3',title:'Maze Prize',type:'collect',item:'prize',count:1,map:'maze',reward:{xp:60,gold:50},
+     text:'Enter the blue portal in the east and finish the hedge maze. A prize waits at the end, bring it to me!',done:'The golden trophy! Magnificent.'}
   ],
 
   // ---- MODELS: arrays of primitive parts, or a function returning a THREE.Group (e.g. load a glTF).
@@ -104,7 +170,16 @@ const CONFIG={
     villager:[P_('cyl',[.3,.9],[0,.45,0],'#b86bd1'),P_('sphere',[.28],[0,1.1,0],'#f1c9a0'),P_('cone',[.3,.5],[0,1.5,0],'#3b2a6e')],
     tree:[P_('cyl',[.15,.7],[0,.35,0],'#7a5230'),P_('cone',[.55,1.3],[0,1.3,0],'#2f8f3f'),P_('cone',[.42,1],[0,1.9,0],'#3aa34a')],
     rock:[P_('sphere',[.45],[0,.25,0],'#8b8b8b',{sc:[1.2,.7,1]})],
-    fish:[P_('box',[.35,.12,.18],[0,.3,0],'#4fc3f7'),P_('cone',[.1,.2],[-.25,.3,0],'#4fc3f7',{rot:[0,0,1.57]})]
+    fish:[P_('box',[.35,.12,.18],[0,.3,0],'#4fc3f7'),P_('cone',[.1,.2],[-.25,.3,0],'#4fc3f7',{rot:[0,0,1.57]})],
+    skeleton:[P_('box',[.35,.6,.2],[0,.8,0],'#e8e8e0'),P_('sphere',[.22],[0,1.3,0],'#f2f2ea'),P_('box',[.08,.5,.08],[-.1,.25,0],'#e8e8e0'),P_('box',[.08,.5,.08],[.1,.25,0],'#e8e8e0'),P_('sphere',[.045],[-.08,1.33,.18],'#111'),P_('sphere',[.045],[.08,1.33,.18],'#111')],
+    chest:[P_('box',[.55,.3,.38],[0,.15,0],'#8b5a2b'),P_('box',[.55,.12,.38],[0,.36,0],'#a0692f'),P_('sphere',[.06],[0,.3,.2],'#ffd23f')],
+    trophy:[P_('cyl',[.2,.1],[0,.05,0],'#c9961a'),P_('cyl',[.06,.3],[0,.25,0],'#ffd23f'),P_('cyl',[.22,.3],[0,.55,0],'#ffd23f')],
+    kid:[P_('cyl',[.2,.6],[0,.3,0],'#3fa7d6'),P_('sphere',[.22],[0,.8,0],'#f1c9a0'),P_('cone',[.22,.25],[0,1.08,0],'#d64545')],
+    cook:[P_('cyl',[.32,.9],[0,.45,0],'#e8e8e8'),P_('sphere',[.28],[0,1.1,0],'#f1c9a0'),P_('cyl',[.22,.35],[0,1.5,0],'#ffffff')],
+    captain:[P_('cyl',[.3,.9],[0,.45,0],'#2a4d8f'),P_('sphere',[.28],[0,1.1,0],'#f1c9a0'),P_('cone',[.38,.3],[0,1.5,0],'#1a1a1a')],
+    prisoner:[P_('cyl',[.3,.9],[0,.45,0],'#e8832a'),P_('sphere',[.28],[0,1.1,0],'#f1c9a0'),P_('box',[.5,.06,.5],[0,.03,0],'#444')],
+    wallblock:[P_('box',[1,1.4,1],[0,.7,0],'#55556a')],
+    hedge:[P_('box',[1,1.1,1],[0,.55,0],'#2e8b3a')]
   },
   player:{hp:10,speed:4.5,rollSpeed:9}
 };
@@ -131,48 +206,63 @@ function makeModel(n){
   return g}
 
 // ---- Map
-const rows=CONFIG.map,W=Math.max(...rows.map(r=>r.length)),H=rows.length;
-const tileAt=(c,r)=>{if(c<0||r<0||c>=W||r>=H)return{solid:true};return CONFIG.legend[rows[r][c]||'~']||CONFIG.legend['.']};
+let rows=[],W=1,H=1,MAP;
+const tileAt=(c,r)=>{if(c<0||r<0||c>=W||r>=H)return{solid:true};return MAP.legend[rows[r][c]||'~']||MAP.legend['.']};
 const solid=(x,z)=>tileAt(Math.floor(x),Math.floor(z)).solid;
 const canStand=(x,z,r=.3)=>!(solid(x-r,z-r)||solid(x+r,z-r)||solid(x-r,z+r)||solid(x+r,z+r));
 const move=(e,dx,dz)=>{if(canStand(e.x+dx,e.z))e.x+=dx;if(canStand(e.x,e.z+dz))e.z+=dz};
-{const ground=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.3,1),new THREE.MeshLambertMaterial({color:0xffffff}),W*H);
+function buildGround(){const ground=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.3,1),new THREE.MeshLambertMaterial({color:0xffffff}),W*H);
  const o=new THREE.Object3D(),c=new THREE.Color();let i=0;
  for(let r=0;r<H;r++)for(let q=0;q<W;q++){const t=tileAt(q,r);
   o.position.set(q+.5,t.solid&&!t.model?-.35:-.15,r+.5);o.updateMatrix();ground.setMatrixAt(i,o.matrix);
   c.set(t.color).offsetHSL(0,0,(Math.random()-.5)*.04);ground.setColorAt(i++,c);
-  if(t.model){const m=makeModel(t.model);m.position.set(q+.5,0,r+.5);m.rotation.y=Math.random()*6.28;m.scale.setScalar(.85+Math.random()*.3);world.add(m)}}
+  if(t.model){const m=makeModel(t.model);m.position.set(q+.5,0,r+.5);if(!t.fixed){m.rotation.y=Math.random()*6.28;m.scale.setScalar(.85+Math.random()*.3)}world.add(m)}}
  ground.instanceMatrix.needsUpdate=ground.instanceColor.needsUpdate=true;world.add(ground)}
 
 // ---- State
-const S={hp:CONFIG.player.hp,maxhp:CONFIG.player.hp,xp:0,lvl:1,gold:0,q:{},msg:'',msgT:0};
+const S={hp:CONFIG.player.hp,maxhp:CONFIG.player.hp,xp:0,lvl:1,gold:0,q:{},got:{},msg:'',msgT:0,talk:false};
 const Q=id=>CONFIG.quests.find(q=>q.id==id), qs=id=>S.q[id]&&S.q[id].state;
 const avail=q=>!S.q[q.id]&&(!q.requires||qs(q.requires)=='done');
-const npcName=id=>CONFIG.npcs.find(n=>n.id==id).name;
-const say=(t,s=5)=>{S.msg=t;S.msgT=s};
+const npcName=id=>{for(const k in CONFIG.maps){const n=CONFIG.maps[k].npcs.find(n=>n.id==id);if(n)return n.name}return id};
+const say=(t,s=5)=>{S.msg=t;S.msgT=s;S.talk=false};
 function gain(xp,gold){S.xp+=xp;S.gold+=gold;while(S.xp>=S.lvl*20){S.xp-=S.lvl*20;S.lvl++;S.maxhp+=2;S.hp=S.maxhp;say('Level up! You are now level '+S.lvl)}}
 
 // ---- Player
-const sp=CONFIG.spawn;
-const P={x:sp.x+.5,z:sp.y+.5,ang:0,atk:0,roll:0,rcd:0,inv:0,kx:0,kz:0,m:makeModel(CONFIG.playerModel)};world.add(P.m);
+const P={x:0,z:0,ang:0,atk:0,roll:0,rcd:0,inv:0,kx:0,kz:0,m:makeModel(CONFIG.playerModel)};world.add(P.m);
 const slash=new THREE.Mesh(new THREE.RingGeometry(.25,.9,20).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.7,side:THREE.DoubleSide}));
 slash.visible=false;world.add(slash);
 
 // ---- NPCs / items / enemies / quest markers
-const npcs=CONFIG.npcs.map(n=>{const m=makeModel(n.model);m.position.set(n.x+.5,0,n.y+.5);world.add(m);
-  const mk=new THREE.Mesh(new THREE.OctahedronGeometry(.17).scale(1,1.6,1),new THREE.MeshBasicMaterial({color:0xffd23f}));mk.position.y=2.2;m.add(mk);return Object.assign({m,mk,x:n.x+.5,z:n.y+.5},n)});
-const items=CONFIG.items.map(i=>{const m=makeModel(i.model);m.position.set(i.x+.5,0,i.y+.5);m.visible=false;world.add(m);return Object.assign({m,got:false,x:i.x+.5,z:i.y+.5},i)});
-const rings=CONFIG.quests.filter(q=>q.type=='reach').map(q=>{const m=new THREE.Mesh(new THREE.RingGeometry(q.at.r-.2,q.at.r,32).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffd23f,transparent:true,opacity:.7}));
+const mkNpcs=()=>MAP.npcs.map(n=>{const m=makeModel(n.model);m.position.set(n.x+.5,0,n.y+.5);world.add(m);
+  const mk=new THREE.Mesh(new THREE.OctahedronGeometry(.17).scale(1,1.6,1),new THREE.MeshBasicMaterial({color:0xffd23f}));mk.position.y=2.2;m.add(mk);return Object.assign({},n,{m,mk,x:n.x+.5,z:n.y+.5})});
+const mkItems=()=>(MAP.items||[]).map((i,k)=>{const m=makeModel(i.model);m.position.set(i.x+.5,0,i.y+.5);m.visible=false;world.add(m);return Object.assign({},i,{m,k,got:!!S.got[MAP.name+':'+k],x:i.x+.5,z:i.y+.5})});
+const mkRings=()=>CONFIG.quests.filter(q=>q.type=='reach'&&(q.map||'overworld')==MAP.name).map(q=>{const m=new THREE.Mesh(new THREE.RingGeometry(q.at.r-.2,q.at.r,32).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffd23f,transparent:true,opacity:.7}));
   m.position.set(q.at.x+.5,.05,q.at.y+.5);m.visible=false;world.add(m);return{q,m}});
 function spawnEnemy(s){const d=CONFIG.enemies[s.type],m=makeModel(d.model);m.scale.setScalar(d.scale||1);world.add(m);
   return{type:s.type,d,m,x:s.x+.5,z:s.y+.5,hx:s.x+.5,hz:s.y+.5,tx:s.x+.5,tz:s.y+.5,hp:d.hp,rt:0,flash:0,wt:0,kx:0,kz:0}}
-const enemies=CONFIG.enemySpawns.map(spawnEnemy);
+const mkEnemies=()=>(MAP.enemySpawns||[]).map(spawnEnemy);
 const flashE=(e,on)=>e.m.traverse(o=>o.material&&o.material.emissive&&o.material.emissive.setHex(on?0xff2222:0));
+
+// ---- Map loading (portals call this)
+let npcs=[],items=[],rings=[],enemies=[],portals=[];
+function loadMap(name,x,y){
+  MAP=CONFIG.maps[name];MAP.name=name;rows=MAP.map;W=Math.max(...rows.map(r=>r.length));H=rows.length;
+  while(world.children.length)world.remove(world.children[0]);world.add(P.m,slash);
+  buildGround();npcs=mkNpcs();items=mkItems();rings=mkRings();enemies=mkEnemies();
+  portals=(MAP.portals||[]).map(p=>{const g=new THREE.Group(),c=p.color||0x9b5de5;
+    g.add(new THREE.Mesh(new THREE.TorusGeometry(.6,.08,8,24),new THREE.MeshBasicMaterial({color:c})));
+    g.add(new THREE.Mesh(new THREE.CircleGeometry(.55,24),new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:.4,side:THREE.DoubleSide})));
+    g.position.set(p.x+.5,.9,p.y+.5);world.add(g);return Object.assign({},p,{g,x:p.x+.5,z:p.y+.5})});
+  P.x=(x==null?MAP.spawn.x:x)+.5;P.z=(y==null?MAP.spawn.y:y)+.5;P.kx=P.kz=0;
+  portals.forEach(p=>p.on=Math.hypot(p.x-P.x,p.z-P.z)<.9);
+  S.msg='';S.talk=false;applyMode(renderer.xr.isPresenting);camera.position.set(P.x,11,P.z+8);
+  if(MAP.title)say('📍 '+MAP.title,3)}
 
 // ---- Quest logic
 function progress(kind,key){for(const q of CONFIG.quests){const st=S.q[q.id];if(!st||st.state!='active'||q.type!=kind)continue;
   if((kind=='kill'&&q.target==key)||(kind=='collect'&&q.item==key)){st.prog++;if(st.prog>=q.count){st.state='ready';say(`Quest ready: return to ${npcName(q.giver)}`)}}}}
-function interact(n){
+function interact(n){interact_(n);S.talk=true;S.msgT=10}
+function interact_(n){
   const mine=CONFIG.quests.filter(q=>q.giver==n.id),rdy=mine.find(q=>qs(q.id)=='ready');
   if(rdy){S.q[rdy.id].state='done';gain(rdy.reward.xp,rdy.reward.gold);say(`${n.name}: ${rdy.done||'Well done!'}  (+${rdy.reward.xp} XP, +${rdy.reward.gold} gold)`);return}
   const tk=CONFIG.quests.find(q=>qs(q.id)=='active'&&q.type=='talk'&&q.target==n.id);
@@ -181,8 +271,8 @@ function interact(n){
   const act=mine.find(q=>qs(q.id)=='active');say(`${n.name}: ${act?(act.reminder||act.text):n.idle}`)}
 
 // ---- Combat
-function hurt(d,dx,dz){if(P.inv>0||P.roll>0)return;S.hp-=d;P.inv=1;const m=Math.hypot(dx,dz)||1;P.kx=-dx/m*7;P.kz=-dz/m*7;
-  if(S.hp<=0){S.hp=S.maxhp;S.gold=Math.floor(S.gold/2);P.x=sp.x+.5;P.z=sp.y+.5;say('You fainted! Half your gold is lost.')}}
+function hurt(d,dx,dz){if(P.inv>0||P.roll>0||S.talk)return;S.hp-=d;P.inv=1;const m=Math.hypot(dx,dz)||1;P.kx=-dx/m*7;P.kz=-dz/m*7;
+  if(S.hp<=0){S.hp=S.maxhp;S.gold=Math.floor(S.gold/2);P.x=MAP.spawn.x+.5;P.z=MAP.spawn.y+.5;say('You fainted! Half your gold is lost.')}}
 function attack(){if(P.atk>0||P.roll>0)return;P.atk=.3;slash.visible=true;const fx=Math.sin(P.ang),fz=Math.cos(P.ang);
   for(const e of enemies){if(e.hp<=0)continue;const dx=e.x-P.x,dz=e.z-P.z,d=Math.hypot(dx,dz),sc=e.d.scale||1;
     if(d<1.9*sc&&(dx*fx+dz*fz)/(d||1)>-.1){e.hp-=S.lvl+1;e.flash=.15;flashE(e,true);e.kx=dx/(d||1)*8;e.kz=dz/(d||1)*8;
@@ -213,7 +303,7 @@ let lastTxt='';
 function hudStr(){let t=`❤ ${S.hp}/${S.maxhp}   Lv ${S.lvl}   XP ${S.xp}/${S.lvl*20}   🪙 ${S.gold}`;
   for(const q of CONFIG.quests){const st=S.q[q.id];if(!st||st.state=='done')continue;
     const o=st.state=='ready'?`return to ${npcName(q.giver)}`:q.type=='kill'?`defeat ${q.target} ${st.prog}/${q.count}`:q.type=='collect'?`find ${q.item} ${st.prog}/${q.count}`:q.type=='talk'?`talk to ${npcName(q.target)}`:`go to ${q.where||'the marked area'}`;
-    t+=`\n• ${q.title}: ${o}`}return t}
+    t+=`\n• ${q.title}: ${o}${q.map&&q.map!=MAP.name?' ('+CONFIG.maps[q.map].title+')':''}`}return t}
 function refresh(){const t=hudStr()+'|'+S.msg;if(t==lastTxt)return;lastTxt=t;
   $('hud').textContent=hudStr();const m=$('msg');m.textContent=S.msg;m.style.display=S.msg&&!renderer.xr.isPresenting?'block':'none';
   const c=pctx;c.clearRect(0,0,512,256);c.fillStyle='rgba(0,0,0,.65)';c.fillRect(0,0,512,256);c.fillStyle='#fff';c.font='20px sans-serif';let y=28;
@@ -223,9 +313,19 @@ function refresh(){const t=hudStr()+'|'+S.msg;if(t==lastTxt)return;lastTxt=t;
 setInterval(refresh,150);
 
 // ---- VR
-function applyMode(vr){const s=vr?.04:1;world.scale.setScalar(s);world.position.set(vr?-W/2*s:0,vr?.75:0,vr?-1.1-H/2*s:0);
-  scene.background.set(vr?'#1b2a3a':'#9bd4f5');panel.visible=vr;$('hud').style.display=vr?'none':'';lastTxt=''}
-for(let i=0;i<2;i++){const c=renderer.xr.getController(i);c.add(new THREE.Mesh(new THREE.BoxGeometry(.04,.04,.14),new THREE.MeshBasicMaterial({color:0xf0902a})));scene.add(c)}
+function applyMode(vr){const s=vr?Math.min(.07,1.5/Math.max(W,H)):1;exitBtn.visible=vr;world.scale.setScalar(s);world.position.set(vr?-W/2*s:0,vr?.75:0,vr?-1.1-H/2*s:0);
+  scene.background.set(vr?'#1b2a3a':(MAP.bg||'#9bd4f5'));panel.visible=vr;$('hud').style.display=vr?'none':'';lastTxt=''}
+// In-VR exit button: point a controller at it and pull the trigger
+const exitC=document.createElement('canvas');exitC.width=256;exitC.height=96;
+{const c=exitC.getContext('2d');c.fillStyle='#c0392b';c.fillRect(0,0,256,96);c.fillStyle='#fff';c.font='bold 44px sans-serif';c.textAlign='center';c.fillText('EXIT VR',128,62)}
+const exitBtn=new THREE.Mesh(new THREE.PlaneGeometry(.32,.12),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(exitC)}));
+exitBtn.position.set(.75,1.0,-.9);exitBtn.rotation.y=-.6;exitBtn.visible=false;scene.add(exitBtn);
+const ray=new THREE.Raycaster(),rm=new THREE.Matrix4();
+const aimed=c=>{rm.identity().extractRotation(c.matrixWorld);ray.ray.origin.setFromMatrixPosition(c.matrixWorld);ray.ray.direction.set(0,0,-1).applyMatrix4(rm);return ray.intersectObject(exitBtn).length>0};
+[0,1].forEach(i=>{const c=renderer.xr.getController(i);
+  c.add(new THREE.Mesh(new THREE.BoxGeometry(.04,.04,.14),new THREE.MeshBasicMaterial({color:0xf0902a})));
+  const l=new THREE.Mesh(new THREE.BoxGeometry(.006,.006,.6),new THREE.MeshBasicMaterial({color:0xffffff}));l.position.z=-.3;c.add(l);
+  c.addEventListener('selectstart',()=>{if(exitBtn.visible&&aimed(c)){const s=renderer.xr.getSession();if(s)s.end()}});scene.add(c)});
 const vb=$('vr');
 if(navigator.xr)navigator.xr.isSessionSupported('immersive-vr').then(ok=>{if(!ok){vb.style.opacity=.55;vb.title='VR not available on this device'}}).catch(()=>{});
 else{vb.style.opacity=.55;vb.title='WebXR not available in this browser'}
@@ -240,7 +340,7 @@ renderer.xr.addEventListener('sessionend',()=>{vb.textContent='Enter VR';applyMo
 const camTarget=new THREE.Vector3();let last=0;
 function update(dt,t){
   const I=readInput(),cfg=CONFIG.player;
-  P.atk-=dt;P.inv-=dt;P.rcd-=dt;if(S.msgT>0&&(S.msgT-=dt)<=0)S.msg='';
+  P.atk-=dt;P.inv-=dt;P.rcd-=dt;if(S.msgT>0&&(S.msgT-=dt)<=0){S.msg='';S.talk=false}
   if(P.kx||P.kz){move(P,P.kx*dt,P.kz*dt);P.kx*=Math.pow(.001,dt);P.kz*=Math.pow(.001,dt);if(Math.abs(P.kx)+Math.abs(P.kz)<.1)P.kx=P.kz=0}
   const mv=Math.hypot(I.x,I.z)>.05;
   if(I.r&&P.roll<=0&&P.rcd<=0){if(mv)P.ang=Math.atan2(I.x,I.z);P.roll=.25;P.rcd=.6}
@@ -250,20 +350,23 @@ function update(dt,t){
   if(P.atk<.15)slash.visible=false;
   slash.position.set(P.x+Math.sin(P.ang),.5,P.z+Math.cos(P.ang));
   P.m.position.set(P.x,mv?Math.abs(Math.sin(t*12))*.1:0,P.z);P.m.rotation.y=P.ang;P.m.scale.y=P.roll>0?.6:1;P.m.visible=P.inv<=0||Math.floor(t*20)%2==0;
+  // portals
+  for(const p of portals){p.g.children[1].scale.setScalar(1+.1*Math.sin(t*4));const on=Math.hypot(p.x-P.x,p.z-P.z)<.8;if(on&&!p.on){loadMap(p.to,p.toX,p.toY);return}p.on=on}
   // NPCs & interaction
   let near=null;
   for(const n of npcs){const d=Math.hypot(n.x-P.x,n.z-P.z);if(d<1.8&&(!near||d<near.d))near={n,d};
     const ready=CONFIG.quests.some(q=>q.giver==n.id&&qs(q.id)=='ready'),av=CONFIG.quests.some(q=>q.giver==n.id&&avail(q)),tg=CONFIG.quests.some(q=>qs(q.id)=='active'&&q.type=='talk'&&q.target==n.id);
     n.mk.visible=ready||av||tg;n.mk.material.color.setHex(ready?0x55e07a:tg?0x55b8ff:0xffd23f);n.mk.position.y=2.2+Math.sin(t*3)*.1;n.mk.rotation.y=t*2;
     n.m.rotation.y=Math.atan2(P.x-n.x,P.z-n.z)*(d<4?1:0)}
-  if(I.u&&near)interact(near.n);
+  if(I.u){if(S.talk){S.msg='';S.msgT=0;S.talk=false}else if(near)interact(near.n)}
   // items
   for(const it of items){it.m.visible=!it.got&&CONFIG.quests.some(q=>qs(q.id)=='active'&&q.type=='collect'&&q.item==it.id);
-    if(it.m.visible){it.m.rotation.y=t*2;it.m.position.y=Math.sin(t*3)*.1;if(Math.hypot(it.x-P.x,it.z-P.z)<.8){it.got=true;it.m.visible=false;progress('collect',it.id)}}}
+    if(it.m.visible){it.m.rotation.y=t*2;it.m.position.y=Math.sin(t*3)*.1;if(Math.hypot(it.x-P.x,it.z-P.z)<.8){it.got=S.got[MAP.name+':'+it.k]=true;it.m.visible=false;progress('collect',it.id)}}}
   // reach quests
   for(const r of rings){const act=qs(r.q.id)=='active';r.m.visible=act;if(act&&Math.hypot(r.q.at.x+.5-P.x,r.q.at.y+.5-P.z)<r.q.at.r){S.q[r.q.id].state='ready';say(`Quest ready: return to ${npcName(r.q.giver)}`)}}
-  // enemies
+  // enemies (frozen while you read a quest)
   for(const e of enemies){
+    if(S.talk)continue;
     if(e.hp<=0){if((e.rt-=dt)<=0){e.hp=e.d.hp;e.x=e.hx;e.z=e.hz;e.m.visible=true}continue}
     if(e.flash>0&&(e.flash-=dt)<=0)flashE(e,false);
     const dx=P.x-e.x,dz=P.z-e.z,dist=Math.hypot(dx,dz),sc=e.d.scale||1;let vx=0,vz=0;
@@ -277,7 +380,7 @@ function update(dt,t){
   // camera (desktop only; headset drives the camera in VR)
   if(!renderer.xr.isPresenting){camTarget.set(P.x,11,P.z+8);camera.position.lerp(camTarget,Math.min(1,dt*5));camera.lookAt(P.x,0,P.z)}
 }
-applyMode(false);camera.position.set(P.x,11,P.z+8);refresh();
+loadMap(CONFIG.start);refresh();
 say('Welcome, brave cat! Talk to the villagers (!) to find quests.',7);
 renderer.setAnimationLoop(t=>{const dt=Math.min(((t-last)/1000)||0,.05);last=t;update(dt,t/1000);renderer.render(scene,camera)});
 </script></body></html>
