@@ -32,15 +32,32 @@ body.vr #touch{display:none!important}
 #bar button{height:44px;min-width:44px;padding:0 12px;border:0;border-radius:12px;background:var(--panel);color:#fff;font-size:20px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
 #bar #vr{background:var(--accent);font-size:15px;font-weight:800;letter-spacing:.5px}
 body.touch #bar{right:auto;left:50%;transform:translateX(-50%)}
+#title{position:fixed;inset:0;z-index:20;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;background:linear-gradient(#10202e,#24506e);padding:20px;overflow:auto}
+#title h1{margin:0;font-size:clamp(26px,5vw,44px)}
+#title p{margin:0 0 8px;opacity:.8}
+#tbtns{display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+#tbtns button{width:min(300px,80vw);padding:18px;border:0;border-radius:16px;background:var(--accent);color:#fff;font-size:17px;cursor:pointer}
+#tbtns button span{font-size:13px;opacity:.9}
+#tbtns button:nth-child(2){background:#8e5bd9}
+#bJump{right:178px;bottom:calc(env(safe-area-inset-bottom,0px) + 110px);width:62px;height:62px;font-size:26px;background:rgba(150,90,220,.85)}
+body:not(.jump) #bJump{display:none}
+body.vr #title{display:none!important}
 </style></head><body>
-<div id="hud"></div><div id="quests"></div><div id="touch"><div id="joyzone"></div><div id="joy"><div id="knob"></div></div><div class="tb" id="bAtk">⚔️</div><div class="tb" id="bRoll">💨</div><div class="tb" id="bUse">💬</div></div><div id="msg"></div>
-<div id="help">Move: WASD / stick · Attack: Space / A / trigger · Roll: Shift / B / grip · Talk: E / X / A-B button</div>
-<div id="bar"><button id="fs" title="Fullscreen"></button><button id="mute" title="Music (M)">🔊</button><button id="vr" title="Enter VR">VR</button></div>
+<div id="hud"></div><div id="quests"></div><div id="title"><h1>🐱 Cat Quest XR</h1><p>Choose your adventure</p><div id="tbtns"></div></div><div id="touch"><div id="joyzone"></div><div id="joy"><div id="knob"></div></div><div class="tb" id="bAtk">⚔️</div><div class="tb" id="bRoll">💨</div><div class="tb" id="bUse">💬</div><div class="tb" id="bJump">🤸</div></div><div id="msg"></div>
+<div id="help">Move: WASD / stick · Attack: Space / A / trigger · Roll: Shift / B / grip · Talk: E / X · Jump (Part 2): L / Y</div>
+<div id="bar"><button id="home" title="Main menu">⌂</button><button id="fs" title="Fullscreen"></button><button id="mute" title="Music (M)">🔊</button><button id="vr" title="Enter VR">VR</button></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 /* ===================== CUSTOMISE EVERYTHING HERE ===================== */
 const P_=(s,size,pos,color,extra)=>Object.assign({s,size,pos,color},extra||{});
+const SPUD=(c,d)=>[P_('sphere',[.42],[0,.55,0],c,{sc:[1,1.2,.9]}),P_('sphere',[.08],[-.14,.78,.34],'#fff'),P_('sphere',[.08],[.14,.78,.34],'#fff'),P_('sphere',[.04],[-.14,.78,.41],'#111'),P_('sphere',[.04],[.14,.78,.41],'#111'),P_('sphere',[.05],[-.2,.45,.35],d),P_('sphere',[.05],[.15,.55,.36],d),P_('sphere',[.04],[.05,.35,.38],d),P_('box',[.2,.1,.28],[-.15,.05,.06],d),P_('box',[.2,.1,.28],[.15,.05,.06],d),P_('cyl',[.05,.3],[-.42,.5,0],c,{rot:[0,0,.6]}),P_('cyl',[.05,.3],[.42,.5,0],c,{rot:[0,0,-.6]})];
+const q2=(map,o)=>{o.part=2;o.map=map;o.diff=o.diff||2;o.reward=o.reward||{xp:[0,15,35,80][o.diff],gold:[0,10,25,60][o.diff]};return o};
 const CONFIG={
+  // ---- PARTS (title screen). Each part has its own start map, hero model, hero HP and quests (quests tagged part:2).
+  parts:{
+    1:{title:'Part 1: Cat Quest',blurb:'Explore Meadow Isle as a tabby cat',start:'overworld',player:'tabby',hp:10,welcome:'Welcome, brave cat! Talk to the villagers (!) to find quests.'},
+    2:{title:'Part 2: Potato World',blurb:'A girl, a potato village and islands full of shops',start:'potato',player:'girl',hp:12,jump:true,seq:true,shuffle:true,
+       welcome:'Welcome to Spud Village! Talk to the spuds (!) to find quests. Jump with L, Y or the jump button.'}},
   start:'overworld',
   // ---- MAPS: each has its own tiles (legend + ASCII rows), NPCs, enemies, items and portals.
   // Legend keys: color, solid (blocks everyone), water (player can swim, land enemies cannot enter), model (decor), fixed (no random rotation/scale).
@@ -233,6 +250,332 @@ const CONFIG={
   enemySpawns:[{type:'skeleton',x:14,y:3},{type:'skeleton',x:23,y:3},{type:'skeleton',x:25,y:5},{type:'skeleton',x:14,y:12},{type:'skeleton',x:15,y:13},{type:'skeleton',x:4,y:12},{type:'skeleton',x:23,y:11}],
   items:[],
   portals:[{x:3,y:3,to:'overworld',toX:14,toY:22,color:0x9b5de5}]
+  },
+  potato:{title:'Spud Village Archipelago',bg:'#9bd4f5',
+  legend:{'.':{color:'#6dbb52'},',':{color:'#5aa845'},'s':{color:'#ecd9a0'},'=':{color:'#b08a5a'},'~':{color:'#3a86d6',water:true},'t':{color:'#6dbb52',solid:true,model:'tree'},'h':{color:'#6dbb52',solid:true,model:'hut',fixed:true},'B':{color:'#ecd9a0',solid:true,model:'shopwall',fixed:true},'c':{color:'#7a5230',model:'crop',fixed:true},'L':{color:'#ecd9a0',solid:true,model:'lighthouse',fixed:true}},
+  map:[
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ssss~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~s~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~ssss..ss~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ssss~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~ss.BBB..s~~~~~~~~~~~~~~~~~~~~~~~~~~~~~s..ss~~~',
+'~~~~~~~~s~~~~~~~~~~~~~~~~ss..BBB..s~~~~~~~~~~~~~~~~~~sss~~~~~~~~s...ss~~',
+'~~~~~~~ssss~~~~~~~~~~~~~~~s...=..ss~~~~~~~~~~~~~~~~sss.sssss~~~ss....ss~',
+'~~~~~~ss..ss~~~~~~~sss~~~~ss.....s~~~~~~~s~~~~~~~~~s..BBB..s~~~s.t.t.ss~',
+'~~~~~~s.BBBss~~~~sss.s~~~~~ss....s~~~~~sss~~~~~~~~~s..BBB..s~~~ss.ssss~~',
+'~~~~~~s.BBB.ss~~~ss.ss~~~~~~sst.ss~~~~ss.s~~~~~~~~~ss..=...s~~~~sss~~~~~',
+'~~~~~ss..=...ss~~~s.s~~~~~~~~ssss~~~~~~sss~~~~~~~~~~s.....ss~~~~~~~~~~~~',
+'~~~~~s.......ss~~~sss~~~~~~~~~ss~~~~~~~~ss~~~~~~~~~~s....ss~~~~~~~~~~~~~',
+'~~~~~s......ss~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ss...s~~~~~~~~~~~~~~',
+'~~~~~ss.tssss~~~~~~~~~~~ssss=~~~~~~~~~~~~~~~~~~~~~~~~sssss~~~~~~~~~~~~~~',
+'~~~~~~ssss~~~~~~~~~~~~~ss...=ss~~~~~~~~~~~~sss~~~~~~~~ss~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~ss....=.ss~~~~~~~~~~ss.ssss~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~ss,....=t.ss~~~~~~~~~sst...s~~~~~~~~~~~~~~sss~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~st.t...=...sssss~~~~~~s....s~~~~~~~~~~~~~~s.s~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~ss......=.....,,s~~~~~~s..sss~~~~~~ss~~~~~~sss~~~~~~',
+'~~~~~~~~~~~~~~~~ss~~s.......=.....t.s~~~~~~s..s~~~~~~sssss~~~~~~s~~~~~~~',
+'~~~~~~~~~~~~~~~ssssss.......=......tss~~~~~ssss~~~~~~s..s~~~~~~~~~~~~~~~',
+'~~~~~~~~sss~~~~ss.sss.h.....=.....h..ss~~~~~~~~~~~~~~ssss~~~~~~~~~~~~~~~',
+'~~~~~~sss.s~~~~~sss~s.......=.........s~~~~~~~~~~~~~~~~ss~~~~~~~~~~~~~~~',
+'~~~~~ss...s~~~~~ss~ss.......=.......t.ss~~~~~~~~~~~~~~~~~~~~~~~~s~~~~~~~',
+'~~~~~s....s~~~~~~~~=====================~~~~~~~~~~~~~~~~~~~~~~ssss~~~~~~',
+'~~~~~ss...s~~~~~~~~s........=.........ts~~~~~~~~~~~~~~~~~~~~~ss..ss~~~~~',
+'~~~~~~sss.s~~~~~~~~s,,......=.....,,,,.s~~~~~~~~~~~~~~~~~~~~ssBBB.s~~~~~',
+'~~~~~~~~sss~~~~~~~~scchccc..=....,h,,,,s~~~~~~~~~~~~~~~~~~~ss.BBB.s~~~~~',
+'~~~~~~~~~~~~~~~~~~~s,,,,....=...,,,t,,ts~~~~~~ssss~~~~~~~~sst..=..ss~~~~',
+'~~~~~~~~~~~~~~~~~~~scccccc..=...,,,,,,,ss~~~~~s..s~~~~~~~~ss.......s~~~~',
+'~~~~~~~~~~~~~~~~~~~s,,,..t..=....,,sssss~~~~sss..s~~~~~~~~~ss......s~~~~',
+'~~~~~~~~~~~~~~~~~~~ssccccc..=....sss~~s~~~~~s....s~~~~~~~~~~ssss.tss~~~~',
+'~~~sss~~~~~ssss~~~~~ss......=sssss~~~~~~~~~~s....ss~~~~~~~~~~~~ssss~~~~~',
+'~~~s.s~~~~~s..ssss~~~ss.....=s~~~~~~~~~~~~~~ssss.ss~~~~~~~~~~~~~~~~~~~~~',
+'~~ss.ss~~~ss.BBB.ss~~~sssss.=ss~~~~~~~~~~~~~~~~sss~~~~~~~~~~~~~~~~~~~~~~',
+'~~sssss~~~s..BBB..ss~~~~~~ss=s~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~s~~~~~~ss..=...ss~~~~~~~sss~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~s......s~~~~~~~~~ss~~~~~~ssss~~~~~~sss~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~s....sss~~~~~~~~~~~~~~~~~s.ss~~~~sss.sssss~~~~~~~~~~~~~~~~~~~',
+'~~~~ss~~~~~s...ss~~~~~~~~~~~~~~~~~~~sss~~~~~s..BBB..s~~~~~~~~~~~~~~~~~~~',
+'~~~ssss~~~~sssss~~~~ss~~~~~~~~~~~~~~ss~~~~~~s..BBB..s~~~~~~s~~~~~~~~~~~~',
+'~~~s..ss~~~~~~~~~~~~sss~~~~~~~~~~~~~~~~~~~~~s...=...s~~~~~sssss~~~~~~~~~',
+'~~~s...ss~~~~~~~~~~~s.ss~~~~~~~~~~~~~~~~~~~~ss.....ss~~~~~~s.ss~~~~~~~~~',
+'~~ss.L..s~~~~~~~~~~sssss~~~~~~~~~~~~~~~~~~~~~ss...ss~~~~~~~sss~~~~~~~~~~',
+'~~st....ss~~~~~~~~~~ss~~~~~~~~~~~~~~~~~~~~~~~~s...s~~~~~~~~ss~~~~~~~~~~~',
+'~~sstssss~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~sssss~~~~~~~~~~~~~~~~~~~~~',
+'~~~sss~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ss~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'],
+  spawn:{x:28,y:24},
+  npcs:[{id:'ettica',name:'Ettica',model:'spud_g',x:31,y:22,idle:['Welcome to Spud Village!','Mind the weevils, they bite.']},
+    {id:'bum',name:'Bum-bum',model:'spud',x:25,y:22,idle:['Mmm, I smell gummy worms.','Have you seen the shops on the islands?']},
+    {id:'oolex',name:'Oolex',model:'spud_r',x:32,y:27,idle:['Shopping is my cardio.','The islands are best reached by swimming.']},
+    {id:'ooga',name:'Ooga Booga',model:'spud',x:25,y:28,idle:['Ooga booga! Hello!','Chips are life.']},
+    {id:'tickler',name:'The Tickler',model:'spud_r',x:28,y:20,idle:['Hee hee hee!','Do not tickle the weevils.']},
+    {id:'phorse',name:'Purple Horse',model:'spud_p',x:28,y:29,idle:['Neigh! I mean, hello.','Be careful near the water.']}],
+  enemySpawns:[{type:'weevil',x:27,y:33},{type:'weevil',x:34,y:30},{type:'weevil',x:20,y:30},{type:'weevil',x:23,y:18},{type:'weevil',x:35,y:23},{type:'weevil',x:30,y:17},{type:'gull',x:9,y:13},{type:'gull',x:29,y:8},{type:'gull',x:55,y:12},{type:'gull',x:63,y:31}],
+  items:[{id:'worm',model:'worm',scatter:10},{id:'chip',model:'chip',scatter:5},{id:'mask',model:'mask',scatter:1},{id:'duster',model:'duster',x:66,y:6,beacon:true}],
+  portals:[{x:9,y:10,to:'shop1',color:0xffb703},{x:30,y:6,to:'shop2',color:0xfb8500},{x:55,y:9,to:'shop3',color:0xe63946},{x:63,y:28,to:'shop4',color:0x2ec4b6},{x:48,y:41,to:'shop5',color:0xa855f7},{x:14,y:36,to:'shop6',color:0x84cc16},{x:46,y:18,to:'zoo',color:0xff9f1c},{x:46,y:30,to:'circus',color:0xe71d36},{x:8,y:22,to:'farm',color:0x2ec4b6}]
+  },
+  shop1:{title:'Sock Emporium',bg:'#2b2233',
+  legend:{'.':{color:'#d9a5b3'},'#':{color:'#3b2f4a',solid:true,model:'wallblock',fixed:true},'k':{color:'#d9a5b3',solid:true,model:'counter',fixed:true},'h':{color:'#d9a5b3',solid:true,model:'shelf',fixed:true}},
+  map:[
+'###########',
+'#hhhhhhhhh#',
+'#.........#',
+'#..kkkkk..#',
+'#.........#',
+'#.........#',
+'#.........#',
+'###########'],
+  spawn:{x:5,y:6},
+  npcs:[{id:'sk1',name:'Ettica (Sock Seller)',model:'spud_g',x:5,y:2,idle:['Socks! Every sock you can dream of!','Left socks only. The right ones are shy.','Try the striped ones, they are tickly.']},
+    {id:'cu1',name:'Purple Horse',model:'spud_p',x:8,y:5,idle:['I am buying socks for my hooves.','Do these match my mane?']}],
+  enemySpawns:[],
+  items:[],
+  portals:[{x:5,y:6,to:'potato',toX:9,toY:11,color:0xffb703}]
+  },
+  shop2:{title:'Hat Hut',bg:'#2b2233',
+  legend:{'.':{color:'#a5c9d9'},'#':{color:'#3b2f4a',solid:true,model:'wallblock',fixed:true},'k':{color:'#a5c9d9',solid:true,model:'counter',fixed:true},'h':{color:'#a5c9d9',solid:true,model:'shelf',fixed:true}},
+  map:[
+'###########',
+'#hhhhhhhhh#',
+'#.........#',
+'#..kkkkk..#',
+'#.........#',
+'#.........#',
+'#.........#',
+'###########'],
+  spawn:{x:5,y:6},
+  npcs:[{id:'sk2',name:'The Tickler (Hatter)',model:'spud_r',x:5,y:2,idle:['Hats for heads, hats for spuds!','This one has a feather. Tickly!','No refunds on hats that have been worn by horses.']},
+    {id:'cu2',name:'Oolex',model:'spud_r',x:8,y:5,idle:['I need a hat for my hat.','Is this one too tall?']}],
+  enemySpawns:[],
+  items:[],
+  portals:[{x:5,y:6,to:'potato',toX:30,toY:7,color:0xfb8500}]
+  },
+  shop3:{title:'Candy Corner',bg:'#2b2233',
+  legend:{'.':{color:'#f2c14e'},'#':{color:'#3b2f4a',solid:true,model:'wallblock',fixed:true},'k':{color:'#f2c14e',solid:true,model:'counter',fixed:true},'h':{color:'#f2c14e',solid:true,model:'shelf',fixed:true}},
+  map:[
+'###########',
+'#hhhhhhhhh#',
+'#.........#',
+'#..kkkkk..#',
+'#.........#',
+'#.........#',
+'#.........#',
+'###########'],
+  spawn:{x:5,y:6},
+  npcs:[{id:'sk3',name:'Ooga Booga (Candy Man)',model:'spud',x:5,y:2,idle:['Gummy worms, lollipops, sugar spuds!','Careful, the sherbet bites back.','Everything here is 90 percent sugar.']},
+    {id:'cu3',name:'Bum-bum',model:'spud',x:8,y:5,idle:['I already ate my gummy worms.','Another bag, please!']}],
+  enemySpawns:[],
+  items:[],
+  portals:[{x:5,y:6,to:'potato',toX:55,toY:10,color:0xe63946}]
+  },
+  shop4:{title:'Spud Spa',bg:'#2b2233',
+  legend:{'.':{color:'#9ed9b0'},'#':{color:'#3b2f4a',solid:true,model:'wallblock',fixed:true},'k':{color:'#9ed9b0',solid:true,model:'counter',fixed:true},'h':{color:'#9ed9b0',solid:true,model:'shelf',fixed:true}},
+  map:[
+'###########',
+'#hhhhhhhhh#',
+'#.........#',
+'#..kkkkk..#',
+'#.........#',
+'#.........#',
+'#.........#',
+'###########'],
+  spawn:{x:5,y:6},
+  npcs:[{id:'sk4',name:'Purple Horse (Masseuse)',model:'spud_p',x:5,y:2,idle:['Relax. Let your eyes go soft.','A little butter, a little peace.','Mud bath is free on Tuesdays.']},
+    {id:'cu4',name:'Ettica',model:'spud_g',x:8,y:5,idle:['Ahhh, my skin is so smooth.','I could stay here forever.']}],
+  enemySpawns:[],
+  items:[],
+  portals:[{x:5,y:6,to:'potato',toX:63,toY:29,color:0x2ec4b6}]
+  },
+  shop5:{title:'Bakery',bg:'#2b2233',
+  legend:{'.':{color:'#e8c39e'},'#':{color:'#3b2f4a',solid:true,model:'wallblock',fixed:true},'k':{color:'#e8c39e',solid:true,model:'counter',fixed:true},'h':{color:'#e8c39e',solid:true,model:'shelf',fixed:true}},
+  map:[
+'###########',
+'#hhhhhhhhh#',
+'#.........#',
+'#..kkkkk..#',
+'#.........#',
+'#.........#',
+'#.........#',
+'###########'],
+  spawn:{x:5,y:6},
+  npcs:[{id:'sk5',name:'Bum-bum (Baker)',model:'spud',x:5,y:2,idle:['Fresh bread, warm from the oven!','Try the spud loaf. It is mostly spud.','The croissants are not on fire, that is normal.']},
+    {id:'cu5',name:'The Tickler',model:'spud_r',x:8,y:5,idle:['This bread is very ticklish.','Two loaves and a muffin, please.']}],
+  enemySpawns:[],
+  items:[],
+  portals:[{x:5,y:6,to:'potato',toX:48,toY:42,color:0xa855f7}]
+  },
+  shop6:{title:'Chip Kiosk',bg:'#2b2233',
+  legend:{'.':{color:'#d9d27a'},'#':{color:'#3b2f4a',solid:true,model:'wallblock',fixed:true},'k':{color:'#d9d27a',solid:true,model:'counter',fixed:true},'h':{color:'#d9d27a',solid:true,model:'shelf',fixed:true}},
+  map:[
+'###########',
+'#hhhhhhhhh#',
+'#.........#',
+'#..kkkkk..#',
+'#.........#',
+'#.........#',
+'#.........#',
+'###########'],
+  spawn:{x:5,y:6},
+  npcs:[{id:'sk6',name:'Oolex (Chip Fryer)',model:'spud_r',x:5,y:2,idle:['Crispy chips, hot and salty!','Dip them in anything. Anything.','Secret ingredient: more chips.']},
+    {id:'cu6',name:'Ooga Booga',model:'spud',x:8,y:5,idle:['I have eaten eleven bags today.','These chips are almost perfect.']}],
+  enemySpawns:[],
+  items:[],
+  portals:[{x:5,y:6,to:'potato',toX:14,toY:37,color:0x84cc16}]
+  },
+  zoo:{title:'Spud Zoo',bg:'#9bd4f5',
+  legend:{'.':{color:'#6dbb52'},',':{color:'#5aa845'},'=':{color:'#b08a5a'},'~':{color:'#3a86d6',water:true},'f':{color:'#6dbb52',solid:true,model:'fence',fixed:true},'j':{color:'#3f7d3a'},'i':{color:'#d6ecf7'},'a':{color:'#d9bf85'},'r':{color:'#7a5a3a'}},
+  map:[
+'..,,,,,,,,.............,,,,,,,,.............,,,,,,,,........',
+'.,,,,,,,,,............,,,,,,,,,............,,,,,,,,,........',
+'.,,,,,,,,,............,,,,,,,,,............,,,,,,,,,........',
+'..,,,,,,,,.............,,,,,,,,.............,,,,,,,,........',
+'...,,,,,,...............,,,,=,........ffffffffffffff........',
+'....,,ffffffffffff......ffffffffff....faaaaaaaaaaaaf........',
+'......fjjjjjjjjjjf......fiiiiiiiif....faaaaaaaaaaaaf........',
+'......fjjjjjjjjjjf......fiiiiiiiif....faaaaaaaaaaaaf........',
+'......fjjjjjjjjjjf......fiiiiiiiif....faaaaaaaaaaaaf........',
+'......fjjjjjjjjjjf......fiiiiiiiif....faaaaaaaaaaaaf........',
+'......fjjjjjjjjjjf......fiiiiiiiif....faaaaaaaaaaaaf........',
+'......fjjjjjjjjjjf......fiiiiiiiif....faaaaaaaaaaaaf........',
+'......ffffffjjffff......fffffiifff....fffffffaafffff........',
+'............................=...............................',
+'............................=...............................',
+'.....,,..................,,,=.................,,,...........',
+'...,,,,,,...............,,,,=,...............,,,,,,.........',
+'..,,,,,,,,.............,,,,,=,,.............,,,,,,,,........',
+'.,,,,,,,,,............,,,,,,=,,............,,,,,,,,,........',
+'.,,,,,,,,,............,,,,,,=,,............,,,,,,,,,........',
+'..,,=====================================================...',
+'...,,,,,,...............,,,,=,..............,,,,,,,.........',
+'....,,,..................,,,=.................,,,...........',
+'............................=...............................',
+'............................=...............................',
+'......ffffffffffff..........=.......ffffffffffffffffffff....',
+'......f,,,,,,,,,,f..........=.......frrrrrrrrrrrrrrrrrrf....',
+'......f,,,,,,,,,,f..........=.......frrrrrrrrrrrrrrrrrrf....',
+'......f,,,~~~,,,,f..........=.......frrrrrrrrrrrrrrrrrrf....',
+'......f,,,~~~,,,,f..........=.......frrrrrrrrrrrrrrrrrrf....',
+'......f,,,~~~,,,,f..........=.......frrrrrrrrrrrrrrrrrrf....',
+'......f,,,,,,,,,,f..........=.......rrrrrrrrrrrrrrrrrrrf....',
+'....,,f,,,,,,,,,,f.......,,,=.......rrrrrrrrrrrrrrrrrrrf....',
+'...,,,ffffff,,ffff......,,,,=,......frrrrrrrrrrrrrrrrrrf....',
+'..,,,,,,,,.............,,,,,=,,.....frrrrrrrrrrrrrrrrrrf....',
+'.,,,,,,,,,............,,,,,,=,,.....frrrrrrrrrrrrrrrrrrf....',
+'.,,,,,,,,,............,,,,,,=,,.....ffffffffffffffffffff....',
+'..,,,,,,,,.............,,,,,,,,.............,,,,,,,,........',
+'...,,,,,,...............,,,,,,...............,,,,,,.........',
+'....,,,..................,,,..................,,,...........'],
+  spawn:{x:28,y:20},
+  npcs:[{id:'zk1',name:'Ettica (Zookeeper)',model:'spud_g',x:26,y:21,idle:['Welcome to the zoo! Please do not feed the tiger.','Every animal here has a name. And a grudge.']},
+    {id:'zk2',name:'Oolex (Snake Keeper)',model:'spud_r',x:31,y:19,idle:['Snakes are just long friends.','Watch your step on the grass.']},
+    {id:'mk',name:'Bum-bum (Monkey)',model:'monkey',x:12,y:9,idle:['Ooh ooh! Bananas?','Ooga? Booga? Bum?']},
+    {id:'pg',name:'Ooga Booga (Penguin)',model:'penguin',x:29,y:9,idle:['Waddle waddle.','It is chilly, and I love it.']},
+    {id:'el',name:'The Tickler (Elephant)',model:'elephant',x:45,y:8,idle:['Trumpet! Hee hee, tickle my trunk.','I never forget a peanut.']},
+    {id:'fl',name:'Purple Horse (Flamingo)',model:'flamingo',x:8,y:27,idle:['I stand on one leg. You cannot.','Pink is a lifestyle.']}],
+  enemySpawns:[{type:'snake',x:23,y:7},{type:'snake',x:4,y:4},{type:'snake',x:2,y:30},{type:'snake',x:54,y:19},{type:'snake',x:57,y:10},{type:'snake',x:21,y:26},{type:'tiger',x:46,y:31,q:'zo1'}],
+  items:[{id:'banana',model:'banana',scatter:5},{id:'chick',model:'chick',scatter:1}],
+  portals:[{x:28,y:20,to:'potato',toX:46,toY:18,color:0xff9f1c}]
+  },
+  circus:{title:'Spud Circus',bg:'#f3c9a0',
+  legend:{'.':{color:'#d9c27a'},'s':{color:'#e8d9b0'},'P':{color:'#a0522d',noscatter:true},'v':{color:'#0b0b12',gap:true,noscatter:true},'T':{color:'#0b0b12',gap:true,noscatter:true,model:'trapeze',fixed:true},'K':{color:'#d9c27a',solid:true,model:'tentwall',fixed:true}},
+  map:[
+'....................................................',
+'....................................................',
+'....................................................',
+'......KKKKKKKKKKKKKKKKKKKKKKK.......................',
+'......PPPPvvPPPPvvPPPPvvPPPPK.......................',
+'......PPPPTvPPPPTvPPPPTvPPPPK.......................',
+'......PPPPvvPPPPvvPPPPvvPPPPK.......................',
+'......KKKKKKKKKKKKKKKKKKKKKKK.......................',
+'....................................................',
+'....................................................',
+'......KKKKKKKKKKKKKKKKKKKKKKKKKKKKK.................',
+'......PPPPvvvvPPPPvvvvPPPPvvvvPPPPK.................',
+'......PPPPvTvvPPPPvTvvPPPPvTvvPPPPK.................',
+'......PPPPvvvvPPPPvvvvPPPPvvvvPPPPK.................',
+'......KKKKKKKKKKKKKKKKKKKKKKKKKKKKK.................',
+'....................................................',
+'....................................................',
+'....................................................',
+'....................................................',
+'....................................................',
+'........................sssss.......................',
+'.......................sssssss......................',
+'......................sssssssss.....................',
+'.....................sssssssssss....................',
+'.....................sssssssssss....................',
+'.....................sssssssssss....................',
+'.....................sssssssssss....................',
+'.....................sssssssssss....................',
+'......................sssssssss.....................',
+'.......................sssssss......................',
+'........................sssss.......................',
+'....................................................',
+'....................................................',
+'....................................................'],
+  spawn:{x:26,y:30},
+  npcs:[{id:'cr',name:'The Tickler (Ringmaster)',model:'spud_r',x:26,y:22,idle:['Ladies and gentlespuds!','The show must go on, and on, and on.']},
+    {id:'ac',name:'Ettica (Acrobat)',model:'spud_g',x:21,y:27,idle:['Up, up and flip!','Never look down. Or do, it is funny.']},
+    {id:'sm',name:'Oolex (Strongman)',model:'spud_r',x:31,y:27,idle:['I lift. You watch.','My muscles are mostly starch.']},
+    {id:'cl',name:'Ooga Booga (Clown)',model:'clown',x:22,y:18,idle:['Honk honk!','Why did the spud cross the ring?']},
+    {id:'tk',name:'Bum-bum (Tickets)',model:'spud',x:34,y:30,idle:['One ticket, one wiggle!','No refunds on dizziness.']}],
+  enemySpawns:[{type:'clown',x:40,y:19},{type:'clown',x:12,y:25},{type:'clown',x:42,y:1},{type:'clown',x:14,y:9},{type:'clown',x:4,y:19},{type:'balloon',x:3,y:9},{type:'balloon',x:16,y:21},{type:'balloon',x:35,y:18},{type:'balloon',x:25,y:15},{type:'balloon',x:17,y:29},{type:'balloon',x:6,y:21},{type:'balloon',x:10,y:19},{type:'balloon',x:41,y:28}],
+  items:[{id:'ball',model:'ball',scatter:6},{id:'hoop',model:'hoop',scatter:3}],
+  portals:[{x:26,y:30,to:'potato',toX:46,toY:30,color:0xe71d36}]
+  },
+  farm:{title:'Spud Farm',bg:'#9bd4f5',
+  legend:{'.':{color:'#7cc455'},',':{color:'#68b043'},'=':{color:'#c2a070'},'~':{color:'#3a86d6',water:true},'f':{color:'#7cc455',solid:true,model:'fence',fixed:true},'c':{color:'#6b4a2b',model:'crop',fixed:true},'A':{color:'#7cc455',solid:true,model:'barn',fixed:true},'H':{color:'#7cc455',solid:true,model:'hay',fixed:true}},
+  map:[
+'.,,,,,,,,,............,,,,,,,,,............,,,,,,,,,....',
+'..,,,,,,,..............,,,,,,,..............,,,,,,,.....',
+'....,,,,......H..........,,,,.................,,,,......',
+'........AAAAA........H..................................',
+'........AAAAA...........................................',
+'........AAAAA...........................................',
+'............................................~~~~~.......',
+'...........................................~~~~~~~......',
+'............................=..............~~~~~~~......',
+'............................=..............~~~~~~~......',
+'............................=..............~~~~~~~......',
+'............................=..............~~~~~~~......',
+'.................H..........=...............~~~~~.......',
+'...,,,,,................,,,,=................,,,,,......',
+'..,,,,ccccccccccccccc.H,,,,,=,..............,,,,,,,.....',
+'.,,,,,,,,,............,,,,,,=,,............,,,,,,,,,....',
+'.,,,,,ccccccccccccccc.,,,,,,=,,............,,,,,,,,,....',
+'.,,,,,,,,,............,,,,,,=,,............,,,,,,,,,....',
+'..,,,,ccccccccccccccc==============================.....',
+'....,,,,.................,,,=.................,,,,......',
+'......ccccccccccccccc.......=...........................',
+'............................=...........................',
+'......ccccccccccccccc.......=...ffffffffffffffff........',
+'............................=...f..............f........',
+'............................=...f..............f........',
+'.....H......................=...f..............f........',
+'......ffffffffff............=...f..............f........',
+'......f........f............=...f..H...........f........',
+'......f........f............=..................f........',
+'......f........f............=..................f........',
+'...,,,f,................,,,,=...f............,,f,,......',
+'..,,,,f,,,.............,,,,,,,..f...........,,,f,,,.....',
+'.,,,,,f,,,.....f......,,,,,,,,,.f..........,,,,f,,,,....',
+'.,,,,,f,,,.....f......,,,,,,,,,.ffffffffffffffff,,,,....',
+'..,,,,ffffffffff......,,,,,,,,,............,,,,,,,,,....',
+'..,,,,,,,..............,,,,,,,..............,,,,,,,.....',
+'....,,,,.................,,,,.................,,,,......',
+'........................................................'],
+  spawn:{x:28,y:18},
+  npcs:[{id:'fm',name:'Ooga Booga (Farmer)',model:'spud',x:30,y:16,idle:['Farming is mostly standing and squinting.','Grow, little spuds, grow.']},
+    {id:'fh',name:'Oolex (Farmhand)',model:'spud_r',x:25,y:20,idle:['I do the heavy lifting. Sometimes.','Hay is for horses. And naps.']},
+    {id:'ch',name:'The Tickler (Chicken Whisperer)',model:'spud_r',x:31,y:21,idle:['Bawk bawk. That means hello.','The chickens respect me.']},
+    {id:'cow',name:'Bum-bum (Cow)',model:'cow',x:38,y:27,idle:['Mooooo.','I give the best milk on the farm.']},
+    {id:'hr',name:'Purple Horse',model:'horse',x:43,y:29,idle:['Neigh! That is my real name.','I am faster than any spud.']},
+    {id:'sh1',name:'Ettica (Sheep)',model:'sheep',x:9,y:29,idle:['Baaa.','Baaaaa!']},
+    {id:'sh2',name:'Oolex (Sheep)',model:'sheep',x:12,y:31,idle:['Baa baa.','Fluffy and proud.']},
+    {id:'sh3',name:'Ooga Booga (Sheep)',model:'sheep',x:10,y:33,idle:['Baaaa?','Counting myself to sleep.']},
+    {id:'pig',name:'Bum-bum Jr. (Piglet)',model:'pig',x:40,y:3,idle:['Oink! You found me!','Mud is my favourite hat.'],rand:true}],
+  enemySpawns:[{type:'crow',x:54,y:18},{type:'crow',x:45,y:4},{type:'crow',x:54,y:12},{type:'crow',x:13,y:2},{type:'crow',x:39,y:28},{type:'crow',x:45,y:15},{type:'crow',x:24,y:1}],
+  items:[{id:'egg',model:'egg',scatter:6},{id:'pumpkin',model:'pumpkin',scatter:4},{id:'chick',model:'chick',scatter:3}],
+  portals:[{x:28,y:18,to:'potato',toX:8,toY:22,color:0x2ec4b6}]
   }
   },
   // ---- Enemy types (swim:true = water only)
@@ -241,7 +584,15 @@ const CONFIG={
     bat:  {model:'bat',  hp:2, dmg:1,speed:3.2,xp:8, gold:4, aggro:6},
     golem:{model:'golem',hp:12,dmg:3,speed:1.3,xp:40,gold:25,aggro:5,scale:1.3},
     skeleton:{model:'skeleton',hp:4,dmg:2,speed:2,xp:12,gold:6,aggro:4.5},
-    jelly:{model:'jelly',hp:3,dmg:1,speed:1.4,xp:10,gold:5,aggro:4.5,swim:true}
+    jelly:{model:'jelly',hp:3,dmg:1,speed:1.4,xp:10,gold:5,aggro:4.5,swim:true},
+    // ---- Part 2 enemies (boss:true shows a boss bar; label = name on it)
+    weevil:{model:'weevil',hp:2,dmg:1,speed:1.8,xp:6,gold:3,aggro:4},
+    gull:{model:'gull',hp:2,dmg:1,speed:3,xp:8,gold:4,aggro:5},
+    crow:{model:'crow',hp:2,dmg:1,speed:3,xp:8,gold:4,aggro:5},
+    snake:{model:'snake',hp:3,dmg:1,speed:2.2,xp:10,gold:5,aggro:4},
+    clown:{model:'clown',hp:5,dmg:1,speed:2.2,xp:14,gold:8,aggro:5},
+    balloon:{model:'balloon',hp:1,dmg:0,speed:1,xp:5,gold:3,aggro:0},
+    tiger:{model:'tiger',label:'TIGER',boss:true,hp:26,dmg:2,speed:3,xp:150,gold:120,aggro:9,scale:1.4,bar:1.6}
   },
   playerModel:'tabby',
 
@@ -284,7 +635,78 @@ const CONFIG={
     {id:'c1',giver:'witch',requires:'q9',diff:3,title:'Crystal Hunt',type:'collect',item:'crystal',count:3,map:'cave',reward:{xp:120,gold:90},
      text:'I need 3 magic crystals from the green portal cave in the north. Beware the golem!',done:'Beautiful crystals! My potions will shine.'},
     {id:'s1',giver:'salty',requires:'p1',diff:3,title:'Dungeon Cleanup',type:'kill',target:'skeleton',count:6,map:'dungeon',reward:{xp:110,gold:100},
-     text:'Skeletons took over the dungeon! Beat 6 of them for me. Use the purple portal in the west.',done:'Me knees stopped shaking. Thank ye!'}
+     text:'Skeletons took over the dungeon! Beat 6 of them for me. Use the purple portal in the west.',done:'Me knees stopped shaking. Thank ye!'},
+    // ======== PART 2 quests (part:2). Order per giver is shuffled every run; each giver offers one quest at a time.
+    // q2(mapWhereItHappens,{...}); extra types: visit{targets:[npcIds]}, unlock:'flip' (grants a move), scatter items are placed randomly each run.
+    q2('potato',{id:'pt1',giver:'bum',title:'Gummy Worm Spill',type:'collect',item:'worm',count:10,
+     text:'I spilled my gummy worms! Can you find them? They rolled all over the islands!',done:'Squish! Every last worm. Bum-bum is happy!'}),
+    q2('shop3',{id:'pt2',giver:'bum',diff:1,title:'Sticky Delivery',type:'talk',target:'sk3',talkText:'More gummy worms for Bum-bum? Coming right up!',
+     text:'Tell the Candy Man at Candy Corner that I need more gummy worms. Swim to his island and go inside!',done:'Sticky success. Thank you!'}),
+    q2('potato',{id:'pt3',giver:'ettica',diff:1,title:'Spud Census',type:'visit',targets:['bum','oolex','ooga','tickler','phorse'],visitText:'Counted! One spud, present and starchy.',
+     text:'I am counting every spud in the village. Say hello to all five of the others!',done:'Five spuds and one me. The census is complete!'}),
+    q2('potato',{id:'pt4',giver:'ettica',title:'Weevil Problem',type:'kill',target:'weevil',count:4,
+     text:'Weevils are nibbling our crops! Defeat 4 of them.',done:'The crops are safe. Thank you!'}),
+    q2('potato',{id:'pt5',giver:'oolex',title:'Shopping Spree',type:'visit',targets:['sk1','sk2','sk3','sk4','sk5','sk6'],visitText:'Welcome, customer!',
+     text:'I am writing a shop guide. Visit the six island shops and talk to every shopkeeper!',done:'My guide is done. Everyone will shop now!'}),
+    q2('shop1',{id:'pt6',giver:'oolex',diff:1,title:'Sock Order',type:'talk',target:'sk1',talkText:'Three pairs for Oolex? Warm toes on the way!',
+     text:'Tell the Sock Seller I need three pairs of socks, please.',done:'Warm toes. Thank you!'}),
+    q2('potato',{id:'pt7',giver:'ooga',title:'Chip Craving',type:'collect',item:'chip',count:5,
+     text:'I need chips! Five of them are lying around the islands somewhere.',done:'Crunch crunch! Ooga booga!'}),
+    q2('potato',{id:'pt8',giver:'ooga',title:'Seagull Menace',type:'kill',target:'gull',count:3,
+     text:'Seagulls keep stealing my chips! Defeat 3 of them.',done:'No more chip thieves. Hooray!'}),
+    q2('potato',{id:'pt9',giver:'tickler',diff:3,title:'The Lost Feather Duster',type:'collect',item:'duster',count:1,
+     text:'My feather duster blew away to a far island! Swim to the golden beam of light and fetch it.',done:'Tickle tickle! You found it!'}),
+    q2('shop1',{id:'pt10',giver:'tickler',diff:1,title:'Tickle Delivery',type:'talk',target:'cu1',talkText:'A tickle from The Tickler? Hee hee, tell him thanks!',
+     text:'Go to the Sock Emporium and tell the customer inside that The Tickler says hello.',done:'Hee hee hee! Delivered!'}),
+    q2('potato',{id:'pt11',giver:'phorse',title:'Where Is My Mask?',type:'collect',item:'mask',count:1,
+     text:'I lost my favourite horse mask somewhere on the islands. Please find it!',done:'My mask! Neigh-ver losing it again.'}),
+    q2('potato',{id:'pt12',giver:'phorse',title:'Lighthouse Dash',type:'reach',at:{x:6,y:44,r:3},where:'the lighthouse in the far south-west',
+     text:'Swim to the lighthouse in the far south-west and check that the lamp is lit.',done:'The lamp is lit. Neigh-ice work!'}),
+    // zoo
+    q2('zoo',{id:'zo1',giver:'zk1',diff:3,title:'The Tiger Escaped!',type:'kill',target:'tiger',count:1,reward:{xp:150,gold:120},
+     text:'The tiger escaped! Kill it before it kills you! It is fast, so dodge and roll. Watch its health bar!',done:'You tamed the beast! The zoo is safe.'}),
+    q2('zoo',{id:'zo2',giver:'zk1',diff:1,title:'Feed the Monkeys',type:'collect',item:'banana',count:5,
+     text:'The monkeys are hungry! Find 5 bananas around the zoo.',done:'Ooh ooh! Happy monkeys!'}),
+    q2('zoo',{id:'zo3',giver:'zk1',diff:1,title:'Animal Census',type:'visit',targets:['mk','pg','el','fl'],visitText:'Roar! I mean, hello.',
+     text:'Visit the monkey, penguin, elephant and flamingo in their enclosures and say hello.',done:'All animals accounted for. Thank you!'}),
+    q2('zoo',{id:'zo4',giver:'zk2',title:'Snake Round-up',type:'kill',target:'snake',count:5,
+     text:'Snakes slithered out of the reptile house! Defeat 5 of them.',done:'Hssss... gone. Thank you!'}),
+    q2('zoo',{id:'zo5',giver:'zk2',diff:1,title:'Lost Baby Chick',type:'collect',item:'chick',count:1,
+     text:'A baby chick wandered out of the aviary. Please find it!',done:'Peep peep! Safe and sound.'}),
+    q2('zoo',{id:'zo6',giver:'zk2',diff:1,title:'Brush the Elephant',type:'talk',target:'el',talkText:'Ahh, that is the spot. Trumpet!',
+     text:'The elephant needs a good brushing. Go and talk to him!',done:'One very clean elephant. Thanks!'}),
+    // circus
+    q2('circus',{id:'ci1',giver:'cr',title:'Complete the Trapeze!',type:'reach',at:{x:26,y:5,r:1.6},unlock:'flip',where:'the end of the first trapeze course',
+     text:'Complete the trapeze! Jump (L / Y / jump button) across the gaps to the last platform in the north. Do it and you will learn a flip!',done:'Magnificent! Press jump twice for a flip!'}),
+    q2('circus',{id:'ci2',giver:'cr',requires:'ci1',diff:3,title:'Flip Master',type:'reach',at:{x:32,y:12,r:1.6},where:'the end of the second trapeze course',
+     text:'Now the big one! The gaps in the second course are huge, so use your flip (jump twice) to cross to the final platform.',done:'The crowd goes wild! Flip master!'}),
+    q2('circus',{id:'ci3',giver:'ac',diff:1,title:'Juggling Balls',type:'collect',item:'ball',count:6,
+     text:'I dropped my juggling balls all over the big top! Find 6 of them.',done:'Catch! You saved my act.'}),
+    q2('circus',{id:'ci4',giver:'ac',title:'Hoop Hunt',type:'collect',item:'hoop',count:3,
+     text:'My flaming hoops went missing. Find 3 of them!',done:'Hoop hoop hooray!'}),
+    q2('circus',{id:'ci5',giver:'sm',title:'Clown Trouble',type:'kill',target:'clown',count:4,
+     text:'Some clowns are being very rude. Defeat 4 of them.',done:'Honk. No more honking. Thank you.'}),
+    q2('circus',{id:'ci6',giver:'sm',diff:1,title:'Pop the Balloons',type:'kill',target:'balloon',count:6,
+     text:'Escaped balloons are floating all over the circus. Pop 6 of them!',done:'Pop pop pop! Satisfying.'}),
+    q2('circus',{id:'ci7',giver:'cl',diff:1,title:'Ticket Mix-up',type:'talk',target:'tk',talkText:'Ticket mix-up? Let me fix that for you.',
+     text:'I think I bought the wrong ticket. Go and talk to the ticket seller for me.',done:'Honk honk! Problem solved.'}),
+    // farm
+    q2('farm',{id:'fa1',giver:'fm',diff:1,title:'Milk the Cow!',type:'talk',target:'cow',talkText:'You milked the cow. Squirt squirt! A bucket of fresh milk. Moo!',
+     text:'Milk the cow! She is in the big pasture in the south-east. Just walk up and talk to her.',done:'Fresh milk! Wonderful.'}),
+    q2('farm',{id:'fa2',giver:'fm',diff:1,title:'Collect Eggs',type:'collect',item:'egg',count:6,
+     text:'The chickens laid eggs everywhere. Collect 6 of them!',done:'Omelettes tonight!'}),
+    q2('farm',{id:'fa3',giver:'fm',title:'Crow Control',type:'kill',target:'crow',count:5,
+     text:'Crows are eating my seeds! Defeat 5 of them.',done:'The scarecrow can retire. Thank you!'}),
+    q2('farm',{id:'fa4',giver:'fh',title:'Lost Piglet',type:'talk',target:'pig',talkText:'Oink! You found me! Tell the farmhand I am fine.',
+     text:'The piglet ran away again! He could be anywhere on the farm. Find him!',done:'Piglet found! You are a star.'}),
+    q2('farm',{id:'fa5',giver:'fh',title:'Round up the Sheep',type:'visit',targets:['sh1','sh2','sh3'],visitText:'Baaa! (That means yes.)',
+     text:'Check on all three sheep in the sheep pen in the south-west.',done:'Three sheep, all present.'}),
+    q2('farm',{id:'fa6',giver:'fh',diff:1,title:'Pumpkin Patch',type:'collect',item:'pumpkin',count:4,
+     text:'Four pumpkins are ready to be picked somewhere on the farm.',done:'Pumpkin pie time!'}),
+    q2('farm',{id:'fa7',giver:'ch',diff:1,title:'Ride Purple Horse',type:'talk',target:'hr',talkText:'Neigh! Hop on... or just say hello. That works too.',
+     text:'Purple Horse wants a visit. Find him in the pasture and say hello!',done:'Horse happy. Chickens happy.'}),
+    q2('farm',{id:'fa8',giver:'ch',title:'Chick Chase',type:'collect',item:'chick',count:3,
+     text:'Three baby chicks escaped the coop. Gather them up!',done:'Peep peep peep! Thank you!'})
   ],
 
   // ---- MODELS: arrays of primitive parts, or a function returning a THREE.Group (e.g. load a glTF).
@@ -330,7 +752,58 @@ const CONFIG={
     berry:[P_('sphere',[.12],[-.1,.15,0],'#d6204a'),P_('sphere',[.12],[.1,.15,.05],'#d6204a'),P_('sphere',[.12],[0,.15,-.1],'#d6204a')],
     pearl:[P_('sphere',[.13],[0,.35,0],'#f6f1ff')],
     crate:[P_('box',[.5,.5,.5],[0,.25,0],'#a67c52')],
-    crystal:[P_('cone',[.18,.7],[0,.4,0],'#b678ff'),P_('cone',[.12,.4],[.15,.25,.05],'#d9b3ff')]
+    crystal:[P_('cone',[.18,.7],[0,.4,0],'#b678ff'),P_('cone',[.12,.4],[.15,.25,.05],'#d9b3ff')],
+    // ---- Part 2 models
+    girl:[P_('cyl',[.11,.55],[-.12,.28,0],'#3b6ea8'),P_('cyl',[.11,.55],[.12,.28,0],'#3b6ea8'),P_('box',[.2,.1,.3],[-.12,.05,.05],'#f8f8f8'),P_('box',[.2,.1,.3],[.12,.05,.05],'#f8f8f8'),   // jeans + shoes
+      P_('box',[.5,.5,.28],[0,.8,0],'#e8554e'),P_('box',[.14,.2,.2],[-.32,.95,0],'#e8554e'),P_('box',[.14,.2,.2],[.32,.95,0],'#e8554e'),                                            // t-shirt
+      P_('cyl',[.06,.4],[-.33,.7,0],'#f1c9a0'),P_('cyl',[.06,.4],[.33,.7,0],'#f1c9a0'),
+      P_('sphere',[.25],[0,1.3,0],'#f1c9a0'),P_('sphere',[.27],[0,1.36,-.05],'#6b4226',{sc:[1,.85,1]}),P_('box',[.46,.1,.2],[0,1.5,.1],'#6b4226'),                          // face + brown hair
+      P_('cone',[.1,.5],[0,1.2,-.42],'#6b4226',{rot:[-2.04,0,0]}),P_('sphere',[.05],[0,1.34,-.3],'#ff5fa2'),                                                                 // ponytail + hair tie
+      P_('torus',[.075,.018],[-.1,1.32,.25],'#22c55e'),P_('torus',[.075,.018],[.1,1.32,.25],'#22c55e'),P_('box',[.06,.02,.02],[0,1.33,.25],'#22c55e'),                         // green glasses
+      P_('sphere',[.03],[-.1,1.32,.23],'#111'),P_('sphere',[.03],[.1,1.32,.23],'#111')],
+    spud:SPUD('#b98a4e','#7a5530'),spud_p:SPUD('#8e5bd9','#5a3a99'),spud_r:SPUD('#d6545a','#8f2a30'),spud_g:SPUD('#e8c24a','#a98820'),
+    weevil:[P_('sphere',[.25],[0,.25,0],'#5a3b1a',{sc:[1,.7,1.3]}),P_('cone',[.07,.35],[0,.25,.45],'#3a2410',{rot:[1.57,0,0]}),P_('sphere',[.04],[-.1,.35,.3],'#fff'),P_('sphere',[.04],[.1,.35,.3],'#fff')],
+    gull:[P_('sphere',[.2],[0,1,0],'#f4f4f4',{sc:[1,.8,1.4]}),P_('box',[.7,.04,.25],[-.45,1.05,0],'#dcdcdc'),P_('box',[.7,.04,.25],[.45,1.05,0],'#dcdcdc'),P_('cone',[.05,.2],[0,1,.35],'#f0a030',{rot:[1.57,0,0]})],
+    crow:[P_('sphere',[.2],[0,1,0],'#222',{sc:[1,.8,1.4]}),P_('box',[.7,.04,.25],[-.45,1.05,0],'#111'),P_('box',[.7,.04,.25],[.45,1.05,0],'#111'),P_('cone',[.05,.2],[0,1,.35],'#f0a030',{rot:[1.57,0,0]})],
+    tiger:[P_('box',[.7,.6,1.3],[0,.7,0],'#e8862a'),...[-.45,-.15,.15,.45].map(z=>P_('box',[.72,.62,.1],[0,.7,z],'#2a1a0a')),P_('sphere',[.4],[0,.95,.85],'#e8862a'),
+      P_('cone',[.12,.2],[-.22,1.35,.85],'#e8862a'),P_('cone',[.12,.2],[.22,1.35,.85],'#e8862a'),P_('sphere',[.06],[-.15,1.02,1.2],'#ff0'),P_('sphere',[.06],[.15,1.02,1.2],'#ff0'),
+      ...[[-.25,-.5],[.25,-.5],[-.25,.5],[.25,.5]].map(([x,z])=>P_('box',[.2,.4,.2],[x,.2,z],'#e8862a')),P_('box',[.12,.12,.9],[0,.9,-1],'#e8862a',{rot:[.5,0,0]})],
+    snake:[...[0,1,2,3,4].map(i=>P_('sphere',[.14-i*.01],[Math.sin(i*1.2)*.15,.14,.4-i*.22],'#4caf50')),P_('sphere',[.05],[-.06,.2,.5],'#ff0'),P_('sphere',[.05],[.06,.2,.5],'#ff0')],
+    clown:[P_('cyl',[.3,.9],[0,.45,0],'#ff4d8d'),P_('sphere',[.28],[0,1.1,0],'#fff'),P_('sphere',[.1],[0,1.1,.28],'#f33'),P_('sphere',[.2],[-.3,1.25,0],'#2ecc71'),P_('sphere',[.2],[.3,1.25,0],'#2ecc71'),P_('cone',[.25,.45],[0,1.55,0],'#3b82f6')],
+    balloon:[P_('sphere',[.3],[0,1.2,0],'#ef4444',{sc:[1,1.2,1]}),P_('cyl',[.01,.8],[0,.6,0],'#ddd')],
+    monkey:[P_('box',[.4,.5,.3],[0,.6,0],'#8b5a2b'),P_('sphere',[.25],[0,1.05,.05],'#8b5a2b'),P_('sphere',[.14],[0,1,.25],'#f1c9a0'),P_('sphere',[.1],[-.25,1.1,.05],'#8b5a2b'),P_('sphere',[.1],[.25,1.1,.05],'#8b5a2b'),
+      P_('box',[.08,.5,.08],[0,.5,-.3],'#8b5a2b',{rot:[-.6,0,0]}),P_('box',[.12,.35,.12],[-.12,.17,0],'#8b5a2b'),P_('box',[.12,.35,.12],[.12,.17,0],'#8b5a2b')],
+    penguin:[P_('sphere',[.35],[0,.5,0],'#1a1a2e',{sc:[1,1.3,.9]}),P_('sphere',[.25],[0,.45,.12],'#fff',{sc:[1,1.2,.8]}),P_('cone',[.07,.18],[0,.85,.3],'#f59e0b',{rot:[1.57,0,0]}),P_('sphere',[.04],[-.1,.9,.25],'#fff'),P_('sphere',[.04],[.1,.9,.25],'#fff')],
+    elephant:[P_('box',[.9,.9,1.4],[0,1,0],'#9aa0a8'),P_('sphere',[.5],[0,1.2,.9],'#9aa0a8'),P_('cyl',[.1,.8],[0,.8,1.35],'#9aa0a8',{rot:[.3,0,0]}),P_('box',[.1,.7,.6],[-.55,1.25,.8],'#8a9098'),P_('box',[.1,.7,.6],[.55,1.25,.8],'#8a9098'),
+      ...[[-.3,-.5],[.3,-.5],[-.3,.5],[.3,.5]].map(([x,z])=>P_('cyl',[.15,.6],[x,.3,z],'#8a9098'))],
+    flamingo:[P_('sphere',[.25],[0,.9,0],'#ff7aa8',{sc:[1,.9,1.4]}),P_('cyl',[.02,.8],[-.07,.4,0],'#ff9ec0'),P_('cyl',[.02,.8],[.07,.4,0],'#ff9ec0'),P_('cyl',[.04,.5],[0,1.2,.25],'#ff7aa8',{rot:[.3,0,0]}),P_('sphere',[.09],[0,1.5,.35],'#ff7aa8'),P_('cone',[.03,.12],[0,1.5,.47],'#222',{rot:[1.57,0,0]})],
+    cow:[P_('box',[.7,.6,1.2],[0,.8,0],'#fff'),P_('box',[.4,.3,.3],[.2,.9,.1],'#222'),P_('box',[.4,.35,.3],[-.2,.75,-.3],'#222'),P_('box',[.4,.4,.45],[0,.95,.8],'#fff'),P_('box',[.25,.15,.2],[0,.8,1.05],'#f2a0a8'),
+      ...[[-.25,-.45],[.25,-.45],[-.25,.45],[.25,.45]].map(([x,z])=>P_('cyl',[.08,.5],[x,.25,z],'#fff')),P_('cone',[.05,.2],[-.15,1.25,.8],'#eee'),P_('cone',[.05,.2],[.15,1.25,.8],'#eee')],
+    horse:[P_('box',[.6,.6,1.3],[0,.9,0],'#9b5de5'),P_('box',[.25,.7,.3],[0,1.35,.65],'#9b5de5',{rot:[.4,0,0]}),P_('box',[.25,.3,.5],[0,1.75,.95],'#9b5de5'),P_('box',[.1,.5,.4],[0,1.6,.5],'#3b1b6b'),P_('box',[.12,.12,.7],[0,.9,-.9],'#3b1b6b',{rot:[.6,0,0]}),
+      ...[[-.2,-.5],[.2,-.5],[-.2,.5],[.2,.5]].map(([x,z])=>P_('cyl',[.07,.6],[x,.3,z],'#8548cc')),P_('cone',[.05,.15],[-.1,2,.9],'#9b5de5'),P_('cone',[.05,.15],[.1,2,.9],'#9b5de5')],
+    sheep:[P_('sphere',[.45],[0,.65,0],'#f5f5f0',{sc:[1,.9,1.2]}),P_('sphere',[.2],[0,.7,.55],'#3a3a3a'),...[[-.2,-.3],[.2,-.3],[-.2,.3],[.2,.3]].map(([x,z])=>P_('cyl',[.05,.4],[x,.2,z],'#3a3a3a'))],
+    pig:[P_('sphere',[.4],[0,.5,0],'#f5a3b5',{sc:[1,.9,1.3]}),P_('sphere',[.2],[0,.55,.5],'#f5a3b5'),P_('cyl',[.08,.1],[0,.5,.7],'#e57f95',{rot:[1.57,0,0]}),...[[-.2,-.3],[.2,-.3],[-.2,.3],[.2,.3]].map(([x,z])=>P_('cyl',[.06,.25],[x,.12,z],'#e57f95'))],
+    worm:[...[0,1,2,3].map(i=>P_('sphere',[.07],[Math.sin(i)*.1,.12,i*.1-.15],i%2?'#ff4d8d':'#7ee05a'))],
+    chip:[P_('cyl',[.18,.04],[0,.2,0],'#f4c542'),P_('sphere',[.03],[.05,.24,0],'#fff')],
+    banana:[P_('box',[.08,.08,.35],[0,.2,0],'#ffe135',{rot:[.5,0,0]}),P_('box',[.08,.08,.25],[0,.3,.25],'#ffe135',{rot:[1,0,0]})],
+    chick:[P_('sphere',[.14],[0,.2,0],'#ffe45c'),P_('sphere',[.1],[0,.35,.1],'#ffe45c'),P_('cone',[.03,.08],[0,.35,.2],'#f59e0b',{rot:[1.57,0,0]})],
+    ball:[P_('sphere',[.15],[0,.2,0],'#a855f7')],
+    hoop:[P_('torus',[.25,.04],[0,.4,0],'#f97316')],
+    egg:[P_('sphere',[.12],[0,.15,0],'#fff7e6',{sc:[1,1.3,1]})],
+    pumpkin:[P_('sphere',[.25],[0,.22,0],'#f97316',{sc:[1,.8,1]}),P_('cyl',[.03,.1],[0,.46,0],'#4d7c0f')],
+    mask:[P_('box',[.3,.2,.06],[0,.4,0],'#9b5de5'),P_('sphere',[.04],[-.07,.42,.04],'#111'),P_('sphere',[.04],[.07,.42,.04],'#111')],
+    duster:[P_('cyl',[.03,.5],[0,.3,0],'#8b5a2b'),P_('sphere',[.14],[0,.6,0],'#ec4899',{sc:[1,1.5,1]})],
+    hut:[P_('box',[.9,.8,.9],[0,.4,0],'#c9a56b'),P_('cone',[.8,.6],[0,1.1,0],'#a33'),P_('box',[.2,.4,.05],[0,.2,.46],'#6b4a26')],
+    shopwall:[P_('box',[1,1.2,1],[0,.6,0],'#f0a35a'),P_('box',[1.1,.15,1.1],[0,1.28,0],'#c0392b'),P_('box',[.6,.3,.05],[0,.8,.52],'#fff')],
+    lighthouse:[P_('cyl',[.4,2.4],[0,1.2,0],'#f4f4f4'),P_('cyl',[.41,.4],[0,1,0],'#e63946'),P_('cyl',[.41,.4],[0,1.8,0],'#e63946'),P_('sphere',[.3],[0,2.6,0],'#ffe066'),P_('cone',[.4,.4],[0,3,0],'#e63946')],
+    fence:[P_('box',[1,.08,.1],[0,.5,0],'#a67c52'),P_('box',[1,.08,.1],[0,.25,0],'#a67c52'),P_('box',[.1,.08,1],[0,.5,0],'#a67c52'),P_('box',[.1,.08,1],[0,.25,0],'#a67c52'),P_('box',[.1,.6,.1],[0,.3,0],'#8a6a3d')],
+    counter:[P_('box',[1,.6,1],[0,.3,0],'#8a5a2b'),P_('box',[1.05,.08,1.05],[0,.62,0],'#c9a56b')],
+    shelf:[P_('box',[1,1.2,.5],[0,.6,0],'#7a5230'),P_('box',[.8,.1,.4],[0,.4,.05],'#e9c46a'),P_('box',[.8,.1,.4],[0,.8,.05],'#e76f51')],
+    trapeze:[P_('cyl',[.02,2],[-.35,1.6,0],'#ddd'),P_('cyl',[.02,2],[.35,1.6,0],'#ddd'),P_('cyl',[.04,.8],[0,.6,0],'#c0392b',{rot:[0,0,1.57]})],
+    tentwall:[P_('box',[1,1.5,1],[0,.75,0],'#ef4444'),P_('box',[1.02,.3,1.02],[0,1.55,0],'#fff')],
+    barn:[P_('box',[1,1.6,1],[0,.8,0],'#b91c1c'),P_('box',[1.1,.15,1.1],[0,1.68,0],'#7f1d1d')],
+    hay:[P_('cyl',[.4,.7],[0,.4,0],'#e9c46a',{rot:[0,0,1.57]})],
+    crop:[P_('cone',[.1,.35],[-.25,.18,-.25],'#4d7c0f'),P_('cone',[.1,.35],[.25,.18,-.25],'#4d7c0f'),P_('cone',[.1,.35],[-.25,.18,.25],'#4d7c0f'),P_('cone',[.1,.35],[.25,.18,.25],'#4d7c0f')]
   },
   player:{hp:10,speed:4.5,rollSpeed:9}
 };
@@ -350,16 +823,16 @@ function makeModel(n){
   const d=CONFIG.models[n];if(typeof d=='function')return d();
   const g=new THREE.Group();
   (d||[]).forEach(p=>{const z=p.size;
-    const geo=p.s=='sphere'?new THREE.SphereGeometry(z[0],14,10):p.s=='cone'?new THREE.ConeGeometry(z[0],z[1],8):
+    const geo=p.s=='torus'?new THREE.TorusGeometry(z[0],z[1],6,16):p.s=='sphere'?new THREE.SphereGeometry(z[0],14,10):p.s=='cone'?new THREE.ConeGeometry(z[0],z[1],8):
       p.s=='cyl'?new THREE.CylinderGeometry(z[0],z[0],z[1],10):new THREE.BoxGeometry(z[0],z[1],z[2]);
     const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:p.color}));
     m.position.set(...(p.pos||[0,0,0]));if(p.rot)m.rotation.set(...p.rot);if(p.sc)m.scale.set(...p.sc);g.add(m)});
   return g}
 
 // ---- Map
-let rows=[],W=1,H=1,MAP;
+let rows=[],W=1,H=1,MAP,PART=null;
 const tileAt=(c,r)=>{if(c<0||r<0||c>=W||r>=H)return{solid:true};return MAP.legend[rows[r][c]||'~']||MAP.legend['.']||MAP.legend['~']};
-const solid=(x,z,k)=>{const t=tileAt(Math.floor(x),Math.floor(z));return t.solid||(k==1&&t.water)||(k==2&&!t.water)};  // k: 0 player, 1 land enemy, 2 swimmer
+const solid=(x,z,k)=>{const t=tileAt(Math.floor(x),Math.floor(z));return t.solid||(k==1&&t.water)||(k==2&&!t.water)||(t.gap&&(k>0||P.h<.35))};  // k: 0 player, 1 land enemy, 2 swimmer
 const canStand=(x,z,r=.3,k=0)=>!(solid(x-r,z-r,k)||solid(x+r,z-r,k)||solid(x-r,z+r,k)||solid(x+r,z+r,k));
 const move=(e,dx,dz)=>{const k=e.k||0;if(canStand(e.x+dx,e.z,.3,k))e.x+=dx;if(canStand(e.x,e.z+dz,.3,k))e.z+=dz};
 function mergeStatic(grp){grp.updateMatrixWorld(true);const bk={};
@@ -373,7 +846,7 @@ function mergeStatic(grp){grp.updateMatrixWorld(true);const bk={};
 function buildGround(){const dec=new THREE.Group(),ground=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.3,1),new THREE.MeshLambertMaterial({color:0xffffff}),W*H);
  const o=new THREE.Object3D(),c=new THREE.Color();let i=0;
  for(let r=0;r<H;r++)for(let q=0;q<W;q++){const t=tileAt(q,r);
-  o.position.set(q+.5,(t.solid&&!t.model)||t.water?-.35:-.15,r+.5);o.updateMatrix();ground.setMatrixAt(i,o.matrix);
+  o.position.set(q+.5,t.gap?-1.6:(t.solid&&!t.model)||t.water?-.35:-.15,r+.5);o.updateMatrix();ground.setMatrixAt(i,o.matrix);
   c.set(t.color).offsetHSL(0,0,(Math.random()-.5)*.04);ground.setColorAt(i++,c);
   if(t.model){const m=makeModel(t.model);m.position.set(q+.5,0,r+.5);if(!t.fixed){m.rotation.y=Math.random()*6.28;m.scale.setScalar(.85+Math.random()*.3)}dec.add(m)}}
  ground.instanceMatrix.needsUpdate=ground.instanceColor.needsUpdate=true;world.add(ground);world.add(mergeStatic(dec))}
@@ -381,25 +854,34 @@ function buildGround(){const dec=new THREE.Group(),ground=new THREE.InstancedMes
 // ---- State
 const S={hp:CONFIG.player.hp,maxhp:CONFIG.player.hp,xp:0,lvl:1,gold:0,q:{},got:{},msg:'',msgT:0,talk:false};
 const Q=id=>CONFIG.quests.find(q=>q.id==id), qs=id=>S.q[id]&&S.q[id].state;
-const avail=q=>!S.q[q.id]&&(!q.requires||qs(q.requires)=='done');
+const avail=q=>!S.q[q.id]&&(!q.requires||qs(q.requires)=='done')&&(!PART||!PART.seq||!CONFIG.quests.some(o=>o!=q&&o.giver==q.giver&&S.q[o.id]&&S.q[o.id].state!='done'));
 const npcName=id=>{for(const k in CONFIG.maps){const n=CONFIG.maps[k].npcs.find(n=>n.id==id);if(n)return n.name}return id};
 const say=(t,s=5)=>{S.msg=t;S.msgT=s;S.talk=false};
 function gain(xp,gold){S.xp+=xp;S.gold+=gold;while(S.xp>=S.lvl*20){S.xp-=S.lvl*20;S.lvl++;S.maxhp+=2;S.hp=S.maxhp;say('Level up! You are now level '+S.lvl)}}
 
 // ---- Player
-const P={x:0,z:0,ang:0,atk:0,roll:0,rcd:0,inv:0,kx:0,kz:0,m:makeModel(CONFIG.playerModel)};world.add(P.m);
+const P={x:0,z:0,ang:0,atk:0,roll:0,rcd:0,inv:0,kx:0,kz:0,h:0,vy:0,air:false,dj:false,fl:0,sx:0,sz:0,m:makeModel(CONFIG.playerModel)};world.add(P.m);
 const rip=new THREE.Mesh(new THREE.RingGeometry(.35,.5,20).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.6}));rip.position.y=.3;rip.visible=false;P.m.add(rip);
 const slash=new THREE.Mesh(new THREE.RingGeometry(.25,.9,20).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.7,side:THREE.DoubleSide}));
 slash.visible=false;world.add(slash);
 
 // ---- NPCs / items / enemies / quest markers
-const mkNpcs=()=>MAP.npcs.map(n=>{const m=makeModel(n.model);m.position.set(n.x+.5,0,n.y+.5);world.add(m);
+// Random placement: npcs with rand:true and items with scatter:n get random walkable tiles (chosen once per run).
+function expand(){if(MAP._x)return MAP._x;
+  const ok=(c,r)=>{const t=tileAt(c,r);return !t.solid&&!t.water&&!t.gap&&!t.noscatter},spots=[];
+  for(let r=0;r<H;r++)for(let c=0;c<W;c++)if(ok(c,r)&&Math.hypot(c-MAP.spawn.x,r-MAP.spawn.y)>3)spots.push([c,r]);
+  const occ=new Set([...MAP.npcs.filter(n=>!n.rand).map(n=>n.x+','+n.y),...(MAP.portals||[]).map(p=>p.x+','+p.y)]);
+  const take=()=>{let s,g=0;do{s=spots[Math.random()*spots.length|0]}while(occ.has(s[0]+','+s[1])&&++g<500);occ.add(s[0]+','+s[1]);return s};
+  const npcs=MAP.npcs.map(n=>{if(!n.rand)return n;const s=take();return Object.assign({},n,{x:s[0],y:s[1]})});
+  const items=[];(MAP.items||[]).forEach(i=>{if(i.scatter)for(let k=0;k<i.scatter;k++){const s=take();items.push(Object.assign({},i,{x:s[0],y:s[1],scatter:0}))}else items.push(i)});
+  return MAP._x={npcs,items}}
+const mkNpcs=()=>expand().npcs.map(n=>{const m=makeModel(n.model);m.position.set(n.x+.5,0,n.y+.5);world.add(m);
   const mk=new THREE.Mesh(new THREE.OctahedronGeometry(.17).scale(1,1.6,1),new THREE.MeshBasicMaterial({color:0xffd23f}));mk.position.y=2.2;m.add(mk);return Object.assign({},n,{m,mk,x:n.x+.5,z:n.y+.5})});
-const mkItems=()=>(MAP.items||[]).map((i,k)=>{const m=makeModel(i.model);m.position.set(i.x+.5,0,i.y+.5);m.visible=false;world.add(m);if(i.beacon){const b=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,16,10),new THREE.MeshBasicMaterial({color:0xffe066,transparent:true,opacity:.4}));b.position.y=8;m.add(b)}return Object.assign({},i,{m,k,got:!!S.got[MAP.name+':'+k],x:i.x+.5,z:i.y+.5})});
+const mkItems=()=>expand().items.map((i,k)=>{const m=makeModel(i.model);m.position.set(i.x+.5,0,i.y+.5);m.visible=false;world.add(m);if(i.beacon){const b=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,16,10),new THREE.MeshBasicMaterial({color:0xffe066,transparent:true,opacity:.4}));b.position.y=8;m.add(b)}return Object.assign({},i,{m,k,got:!!S.got[MAP.name+':'+k],x:i.x+.5,z:i.y+.5})});
 const mkRings=()=>CONFIG.quests.filter(q=>q.type=='reach'&&(q.map||'overworld')==MAP.name).map(q=>{const m=new THREE.Mesh(new THREE.RingGeometry(q.at.r-.2,q.at.r,32).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffd23f,transparent:true,opacity:.7}));
   m.position.set(q.at.x+.5,.05,q.at.y+.5);m.visible=false;world.add(m);return{q,m}});
-function spawnEnemy(s){const d=CONFIG.enemies[s.type],m=makeModel(d.model);m.scale.setScalar(d.scale||1);world.add(m);
-  return{type:s.type,d,k:d.swim?2:1,m,x:s.x+.5,z:s.y+.5,hx:s.x+.5,hz:s.y+.5,tx:s.x+.5,tz:s.y+.5,hp:d.hp,rt:0,flash:0,wt:0,kx:0,kz:0}}
+function spawnEnemy(s){const d=CONFIG.enemies[s.type],m=makeModel(d.model);m.scale.setScalar(d.scale||1);const bar=new THREE.Group(),bb=new THREE.Mesh(new THREE.PlaneGeometry(1,.16).translate(.5,0,0).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0x440000})),bf=new THREE.Mesh(new THREE.PlaneGeometry(1,.16).translate(.5,0,0).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0x44e044}));bb.position.y=-.01;bar.add(bb,bf);bar.position.set(-.5,(d.bar||1.7)+.3,0);bar.visible=false;m.add(bar);world.add(m);
+  return{type:s.type,q:s.q,bar,bf,d,k:d.swim?2:1,m,x:s.x+.5,z:s.y+.5,hx:s.x+.5,hz:s.y+.5,tx:s.x+.5,tz:s.y+.5,hp:d.hp,rt:0,flash:0,wt:0,kx:0,kz:0}}
 const mkEnemies=()=>(MAP.enemySpawns||[]).map(spawnEnemy);
 const flashE=(e,on)=>e.m.traverse(o=>o.material&&o.material.emissive&&o.material.emissive.setHex(on?0xff2222:0));
 
@@ -413,7 +895,7 @@ function loadMap(name,x,y){
     g.add(new THREE.Mesh(new THREE.TorusGeometry(.6,.08,8,24),new THREE.MeshBasicMaterial({color:c})));
     g.add(new THREE.Mesh(new THREE.CircleGeometry(.55,24),new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:.4,side:THREE.DoubleSide})));
     g.position.set(p.x+.5,.9,p.y+.5);world.add(g);return Object.assign({},p,{g,x:p.x+.5,z:p.y+.5})});
-  P.x=(x==null?MAP.spawn.x:x)+.5;P.z=(y==null?MAP.spawn.y:y)+.5;P.kx=P.kz=0;
+  P.x=(x==null?MAP.spawn.x:x)+.5;P.z=(y==null?MAP.spawn.y:y)+.5;P.kx=P.kz=0;P.sx=P.x;P.sz=P.z;P.h=0;P.air=false;
   portals.forEach(p=>p.on=Math.hypot(p.x-P.x,p.z-P.z)<.9);
   S.msg='';S.talk=false;applyMode(renderer.xr.isPresenting);camera.position.set(P.x,11,P.z+8);
   if(MAP.title)say('📍 '+MAP.title,3)}
@@ -425,22 +907,25 @@ function interact(n){interact_(n);S.talk=true;S.msgT=10}
 function interact_(n){
   const mine=CONFIG.quests.filter(q=>q.giver==n.id),rdy=mine.find(q=>qs(q.id)=='ready');
   if(rdy){S.q[rdy.id].state='done';gain(rdy.reward.xp,rdy.reward.gold);say(`${n.name}: ${rdy.done||'Well done!'}  (+${rdy.reward.xp} XP, +${rdy.reward.gold} gold)`);return}
+  const vq=CONFIG.quests.find(q=>qs(q.id)=='active'&&q.type=='visit'&&q.targets.includes(n.id)&&!S.q[q.id].seen[n.id]);
+  if(vq){const st=S.q[vq.id];st.seen[n.id]=1;st.prog=Object.keys(st.seen).length;const vt=vq.visitText||'Nice to meet you!';
+    if(st.prog>=vq.targets.length){st.state='ready';say(`${n.name}: ${vt}  Return to ${npcName(vq.giver)}.`)}else say(`${n.name}: ${vt} (${st.prog}/${vq.targets.length})`);return}
   const tk=CONFIG.quests.find(q=>qs(q.id)=='active'&&q.type=='talk'&&q.target==n.id);
   if(tk){S.q[tk.id].state='ready';say(`${n.name}: ${tk.talkText||'Hello!'}  Return to ${npcName(tk.giver)}.`);return}
-  const nw=mine.find(avail);if(nw){S.q[nw.id]={state:'active',prog:0};say(`${n.name}: ${nw.text}`);return}
-  const act=mine.find(q=>qs(q.id)=='active');say(`${n.name}: ${act?(act.reminder||act.text):n.idle}`)}
+  const nw=mine.find(avail);if(nw){S.q[nw.id]={state:'active',prog:0,seen:{}};say(`${n.name}: ${nw.text}`);return}
+  const act=mine.find(q=>qs(q.id)=='active');say(`${n.name}: ${act?(act.reminder||act.text):(Array.isArray(n.idle)?n.idle[Math.random()*n.idle.length|0]:n.idle)}`)}
 
 // ---- Combat
-function hurt(d,dx,dz){if(P.inv>0||P.roll>0||S.talk)return;S.hp-=d;P.inv=1;S.alert=6;const m=Math.hypot(dx,dz)||1;P.kx=-dx/m*7;P.kz=-dz/m*7;
+function hurt(d,dx,dz){if(P.inv>0||P.roll>0||S.talk||P.h>.6)return;S.hp-=d;P.inv=1;S.alert=6;const m=Math.hypot(dx,dz)||1;P.kx=-dx/m*7;P.kz=-dz/m*7;
   if(S.hp<=0){S.hp=S.maxhp;S.gold=Math.floor(S.gold/2);P.x=MAP.spawn.x+.5;P.z=MAP.spawn.y+.5;say('You fainted! Half your gold is lost.')}}
 function attack(){if(P.atk>0||P.roll>0)return;P.atk=.3;slash.visible=true;const fx=Math.sin(P.ang),fz=Math.cos(P.ang);
-  for(const e of enemies){if(e.hp<=0)continue;const dx=e.x-P.x,dz=e.z-P.z,d=Math.hypot(dx,dz),sc=e.d.scale||1;
+  for(const e of enemies){if(e.hp<=0||!e.m.visible)continue;const dx=e.x-P.x,dz=e.z-P.z,d=Math.hypot(dx,dz),sc=e.d.scale||1;
     if(d<1.9*sc&&(dx*fx+dz*fz)/(d||1)>-.1){e.hp-=S.lvl+1;e.flash=.15;flashE(e,true);e.kx=dx/(d||1)*8;e.kz=dz/(d||1)*8;
       if(e.hp<=0){e.rt=15;e.m.visible=false;gain(e.d.xp,e.d.gold);progress('kill',e.type)}}}}
 
 // ---- Touch controls (Brawl Stars style): floating joystick on the left, attack / roll / talk buttons on the right.
 // Shown on touch devices; hidden once a keyboard or gamepad is used, and in VR.
-const TOUCH={x:0,z:0,a:false,r:false,u:false};
+const TOUCH={x:0,z:0,a:false,r:false,u:false,j:false};
 (()=>{if(!((window.matchMedia&&matchMedia('(pointer:coarse)').matches)||('ontouchstart' in window)))return;
   document.body.classList.add('touch');
   const zone=$('joyzone'),base=$('joy'),knob=$('knob'),R=55;let jid=null,cx=0,cy=0;
@@ -451,7 +936,7 @@ const TOUCH={x:0,z:0,a:false,r:false,u:false};
   zone.addEventListener('pointermove',e=>{if(e.pointerId==jid)jm(e)});
   const end=e=>{if(e.pointerId!=jid)return;jid=null;TOUCH.x=TOUCH.z=0;knob.style.transform='';base.style.left=base.style.top=''};
   zone.addEventListener('pointerup',end);zone.addEventListener('pointercancel',end);
-  [['bAtk','a'],['bRoll','r'],['bUse','u']].forEach(([id,k])=>{const b=$(id);
+  [['bAtk','a'],['bRoll','r'],['bUse','u'],['bJump','j']].forEach(([id,k])=>{const b=$(id);
     b.addEventListener('pointerdown',e=>{e.preventDefault();TOUCH[k]=true;b.classList.add('on')});
     const up=()=>{TOUCH[k]=false;b.classList.remove('on')};['pointerup','pointercancel','pointerleave'].forEach(ev=>b.addEventListener(ev,up))});
   addEventListener('keydown',()=>{document.body.classList.remove('touch');TOUCH.x=TOUCH.z=0});
@@ -464,16 +949,16 @@ addEventListener('keydown',e=>{keys[e.code]=1;if(e.code=='Space')e.preventDefaul
 const edge=(k,v)=>{const r=v&&!prev[k];prev[k]=v;return r};
 function readInput(){
   let x=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),z=(keys.KeyS||keys.ArrowDown?1:0)-(keys.KeyW||keys.ArrowUp?1:0);
-  let a=!!(keys.Space||keys.KeyJ),r=!!(keys.ShiftLeft||keys.KeyK),u=!!(keys.KeyE||keys.Enter);
+  let a=!!(keys.Space||keys.KeyJ),r=!!(keys.ShiftLeft||keys.KeyK),u=!!(keys.KeyE||keys.Enter),jv=!!keys.KeyL;
   const dz=v=>Math.abs(v)>.2?v:0;
   for(const g of (navigator.getGamepads?navigator.getGamepads():[])){if(!g)continue;const b=g.buttons.map(q=>q.pressed);
     x+=dz(g.axes[0]||0)+(b[15]?1:0)-(b[14]?1:0);z+=dz(g.axes[1]||0)+(b[13]?1:0)-(b[12]?1:0);
-    a=a||b[0]||b[7]||b[5];r=r||b[1]||b[6]||b[4];u=u||b[2]||b[3]}
+    a=a||b[0]||b[7]||b[5];r=r||b[1]||b[6]||b[4];u=u||b[2];jv=jv||b[3]}
   const s=renderer.xr.getSession();
   if(s)for(const src of s.inputSources){const g=src.gamepad;if(!g)continue;const b=g.buttons.map(q=>q.pressed);
-    x+=dz(g.axes[2]||0);z+=dz(g.axes[3]||0);a=a||b[0];r=r||b[1];u=u||b[4]||b[5]}
-  x+=TOUCH.x;z+=TOUCH.z;a=a||TOUCH.a;r=r||TOUCH.r;u=u||TOUCH.u;const m=Math.hypot(x,z);if(m>1){x/=m;z/=m}
-  return{x,z,a,r:edge('r',r),u:edge('u',u)}}
+    x+=dz(g.axes[2]||0);z+=dz(g.axes[3]||0);a=a||b[0];r=r||b[1];u=u||b[4]||b[5];jv=jv||b[3]}
+  x+=TOUCH.x;z+=TOUCH.z;a=a||TOUCH.a;r=r||TOUCH.r;u=u||TOUCH.u;jv=jv||TOUCH.j;const m=Math.hypot(x,z);if(m>1){x/=m;z/=m}
+  return{x,z,a,r:edge('r',r),u:edge('u',u),j:edge('j',jv)}}
 
 // ---- HUD: DOM panels on desktop, two canvas boards in VR (stats/messages + quest board)
 function mkPanel(w,h,px,py,pz,ry){const cv=document.createElement('canvas');cv.width=w;cv.height=h;const t=new THREE.CanvasTexture(cv);
@@ -487,13 +972,16 @@ function hintFor(q){if((q.map||'overworld')!=MAP.name)return` (${CONFIG.maps[q.m
   if(q.type=='reach')tg={x:q.at.x+.5,z:q.at.y+.5};
   else if(q.type=='collect'){const it=items.find(i=>i.id==q.item&&!i.got&&i.beacon);if(it)tg={x:it.x,z:it.z}}
   if(!tg)return'';const dx=tg.x-P.x,dz=tg.z-P.z;return` -> ${DIRS[(Math.round(Math.atan2(dx,-dz)/(Math.PI/4))+8)%8]} ${Math.round(Math.hypot(dx,dz))} tiles`}
-const statStr=()=>`❤ ${S.hp}/${S.maxhp}   Lv ${S.lvl}   XP ${S.xp}/${S.lvl*20}   🪙 ${S.gold}\n📍 ${MAP.title}`;
+const statStr=()=>{let t=`❤ ${S.hp}/${S.maxhp}   Lv ${S.lvl}   XP ${S.xp}/${S.lvl*20}   🪙 ${S.gold}
+📍 ${MAP.title}`;
+  for(const e of enemies)if(e.d.boss&&e.hp>0&&e.m.visible){const n=Math.max(0,Math.round(e.hp/e.d.hp*12));t+=`
+${e.d.label||e.type}  ${'█'.repeat(n)+'░'.repeat(12-n)}`}return t};
 function questStr(){let t='';for(const q of CONFIG.quests){const st=S.q[q.id];if(!st||st.state=='done')continue;
-  const o=st.state=='ready'?`return to ${npcName(q.giver)}`:q.type=='kill'?`defeat ${q.target} ${st.prog}/${q.count}`:q.type=='collect'?`find ${q.item} ${st.prog}/${q.count}`:q.type=='talk'?`talk to ${npcName(q.target)}`:`go to ${q.where||'the marked area'}`;
+  const o=st.state=='ready'?`return to ${npcName(q.giver)}`:q.type=='kill'?`defeat ${q.target} ${st.prog}/${q.count}`:q.type=='collect'?`find ${q.item} ${st.prog}/${q.count}`:q.type=='visit'?`meet ${st.prog}/${q.targets.length} characters`:q.type=='talk'?`talk to ${npcName(q.target)}`:`go to ${q.where||'the marked area'}`;
   t+=(t?'\n':'')+`${'★'.repeat(q.diff||1)} ${q.title}: ${o}${st.state=='ready'?'':hintFor(q)}`}
   return t?'QUEST BOARD\n'+t:''}
 let lastTxt='';
-function refresh(){const a=statStr(),b=questStr(),t=a+'|'+b+'|'+S.msg;if(t==lastTxt)return;lastTxt=t;
+function refresh(){if(!MAP)return;const a=statStr(),b=questStr(),t=a+'|'+b+'|'+S.msg;if(t==lastTxt)return;lastTxt=t;
   $('hud').textContent=a;$('quests').textContent=b;
   const m=$('msg');m.textContent=S.msg;m.style.display=S.msg?'block':'none';
   paint(pnl,a+(S.msg?'\n\n'+S.msg:''));paint(qpn,b||'QUEST BOARD\nNo active quests.\nTalk to villagers marked with !')}
@@ -517,7 +1005,7 @@ const aimed=c=>{rm.identity().extractRotation(c.matrixWorld);ray.ray.origin.setF
 const vb=$('vr');
 if(navigator.xr)navigator.xr.isSessionSupported('immersive-vr').then(ok=>{if(!ok){vb.style.opacity=.55;vb.title='VR not available on this device'}}).catch(()=>{});
 else{vb.style.opacity=.55;vb.title='WebXR not available in this browser'}
-vb.onclick=async()=>{music.start();const cur=renderer.xr.getSession();if(cur){cur.end();return}
+vb.onclick=async()=>{music.start();if(paused)startPart(PARTN||1);const cur=renderer.xr.getSession();if(cur){cur.end();return}
   if(!navigator.xr){say('WebXR is not available in this browser.');return}
   try{const s=await navigator.xr.requestSession('immersive-vr',{optionalFeatures:['local-floor','bounded-floor']});
     renderer.xr.setReferenceSpaceType('local-floor');await renderer.xr.setSession(s)}catch(e){say('Could not start VR: '+e.message)}};
@@ -566,6 +1054,22 @@ if(!(document.fullscreenEnabled||document.webkitFullscreenEnabled)||!(de.request
 fsSync();
 addEventListener('keydown',e=>{if(e.code=='KeyF')fsb.onclick()});
 
+// ---- Parts + title screen. Part 2 shuffles its quest order every run.
+const ALLQ=CONFIG.quests.slice();let paused=true,PARTN=0;
+const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
+function showTitle(){paused=true;$('title').style.display='flex'}
+function startPart(n){PARTN=n;PART=CONFIG.parts[n];
+  for(const k in CONFIG.maps)delete CONFIG.maps[k]._x;
+  CONFIG.quests=ALLQ.filter(q=>(q.part||1)==n);if(PART.shuffle)shuffle(CONFIG.quests);
+  Object.assign(S,{hp:PART.hp,maxhp:PART.hp,xp:0,lvl:1,gold:0,q:{},got:{},msg:'',msgT:0,talk:false,alert:0,flip:false});
+  world.remove(P.m);P.m=makeModel(PART.player);P.m.rotation.order='YXZ';P.m.add(rip);
+  Object.assign(P,{h:0,vy:0,air:false,dj:false,fl:0,roll:0,atk:0,inv:0,kx:0,kz:0});
+  document.body.classList.toggle('jump',!!PART.jump);
+  $('title').style.display='none';paused=false;lastTxt='';
+  loadMap(PART.start);say(PART.welcome,7);refresh()}
+$('home').onclick=showTitle;
+Object.keys(CONFIG.parts).forEach(k=>{const p=CONFIG.parts[k],b=document.createElement('button');b.innerHTML=`<b>${p.title}</b><br><span>${p.blurb}</span>`;b.onclick=()=>startPart(+k);$('tbtns').appendChild(b)});
+
 // ---- Main loop
 const camTarget=new THREE.Vector3();let last=0;
 function update(dt,t){
@@ -576,16 +1080,21 @@ function update(dt,t){
   if(I.r&&P.roll<=0&&P.rcd<=0&&!sw){if(mv)P.ang=Math.atan2(I.x,I.z);P.roll=.25;P.rcd=.6}
   if(P.roll>0){P.roll-=dt;move(P,Math.sin(P.ang)*cfg.rollSpeed*dt,Math.cos(P.ang)*cfg.rollSpeed*dt)}
   else if(mv){P.ang=Math.atan2(I.x,I.z);move(P,I.x*spd*dt,I.z*spd*dt)}
+  if(PART.jump){   // Part 2: jump (and a flip once unlocked). Jumping dodges attacks and crosses pits.
+    if(I.j){if(!P.air){P.vy=7.5;P.air=true;P.dj=false}else if(S.flip&&!P.dj){P.vy=7;P.dj=true;P.fl=1}}
+    if(P.air){P.vy-=16*dt;P.h+=P.vy*dt;if(P.h<=0){P.h=0;P.vy=0;P.air=false;if(tileAt(Math.floor(P.x),Math.floor(P.z)).gap){hurt(1,0,0);P.x=P.sx;P.z=P.sz;say('You fell! Try again.',3)}}}
+    else if(!tileAt(Math.floor(P.x),Math.floor(P.z)).gap){P.sx=P.x;P.sz=P.z}
+    P.fl=Math.max(0,P.fl-dt*1.7)}
   if(I.a)attack();
   if(P.atk<.15)slash.visible=false;
   slash.position.set(P.x+Math.sin(P.ang),.5,P.z+Math.cos(P.ang));
-  P.m.position.set(P.x,sw?-.3+Math.sin(t*4)*.05:mv?Math.abs(Math.sin(t*12))*.1:0,P.z);rip.visible=sw;P.m.rotation.y=P.ang;P.m.scale.y=P.roll>0?.6:1;P.m.visible=P.inv<=0||Math.floor(t*20)%2==0;
+  P.m.position.set(P.x,(sw?-.3+Math.sin(t*4)*.05:mv&&!P.air?Math.abs(Math.sin(t*12))*.1:0)+P.h,P.z);P.m.rotation.x=P.fl>0?-(1-P.fl)*6.283:0;rip.visible=sw&&!P.air;P.m.rotation.y=P.ang;P.m.scale.y=P.roll>0?.6:1;P.m.visible=P.inv<=0||Math.floor(t*20)%2==0;
   // portals
   for(const p of portals){p.g.children[1].scale.setScalar(1+.1*Math.sin(t*4));const on=Math.hypot(p.x-P.x,p.z-P.z)<.8;if(on&&!p.on){loadMap(p.to,p.toX,p.toY);return}p.on=on}
   // NPCs & interaction
   let near=null;
   for(const n of npcs){const d=Math.hypot(n.x-P.x,n.z-P.z);if(d<1.8&&(!near||d<near.d))near={n,d};
-    const ready=CONFIG.quests.some(q=>q.giver==n.id&&qs(q.id)=='ready'),av=CONFIG.quests.some(q=>q.giver==n.id&&avail(q)),tg=CONFIG.quests.some(q=>qs(q.id)=='active'&&q.type=='talk'&&q.target==n.id);
+    const ready=CONFIG.quests.some(q=>q.giver==n.id&&qs(q.id)=='ready'),av=CONFIG.quests.some(q=>q.giver==n.id&&avail(q)),tg=CONFIG.quests.some(q=>qs(q.id)=='active'&&((q.type=='talk'&&q.target==n.id)||(q.type=='visit'&&q.targets.includes(n.id)&&!S.q[q.id].seen[n.id])));
     n.mk.visible=ready||av||tg;n.mk.material.color.setHex(ready?0x55e07a:tg?0x55b8ff:0xffd23f);n.mk.position.y=2.2+Math.sin(t*3)*.1;n.mk.rotation.y=t*2;
     n.m.rotation.y=Math.atan2(P.x-n.x,P.z-n.z)*(d<4?1:0)}
   if(I.u){if(S.talk){S.msg='';S.msgT=0;S.talk=false}else if(near)interact(near.n)}
@@ -593,11 +1102,12 @@ function update(dt,t){
   for(const it of items){it.m.visible=!it.got&&CONFIG.quests.some(q=>qs(q.id)=='active'&&q.type=='collect'&&q.item==it.id);
     if(it.m.visible){it.m.rotation.y=t*2;it.m.position.y=Math.sin(t*3)*.1;if(Math.hypot(it.x-P.x,it.z-P.z)<.8){it.got=S.got[MAP.name+':'+it.k]=true;it.m.visible=false;progress('collect',it.id)}}}
   // reach quests
-  for(const r of rings){const act=qs(r.q.id)=='active';r.m.visible=act;if(act&&Math.hypot(r.q.at.x+.5-P.x,r.q.at.y+.5-P.z)<r.q.at.r){S.q[r.q.id].state='ready';say(`Quest ready: return to ${npcName(r.q.giver)}`)}}
+  for(const r of rings){const act=qs(r.q.id)=='active';r.m.visible=act;if(act&&Math.hypot(r.q.at.x+.5-P.x,r.q.at.y+.5-P.z)<r.q.at.r){S.q[r.q.id].state='ready';if(r.q.unlock)S[r.q.unlock]=true;say(r.q.unlock?`New move unlocked: FLIP! Press jump twice in the air. Return to ${npcName(r.q.giver)}.`:`Quest ready: return to ${npcName(r.q.giver)}`)}}
   // enemies (they still move, but cannot hurt you while you read a quest: see hurt())
   for(const e of enemies){
+    if(e.q){if(qs(e.q)!='active'){e.m.visible=false;continue}if(e.hp>0)e.m.visible=true}
     if(e.hp<=0){if((e.rt-=dt)<=0){e.hp=e.d.hp;e.x=e.hx;e.z=e.hz;e.m.visible=true}continue}
-    if(e.flash>0&&(e.flash-=dt)<=0)flashE(e,false);
+    if(e.flash>0&&(e.flash-=dt)<=0)flashE(e,false);e.bar.visible=e.hp<e.d.hp;e.bf.scale.x=Math.max(.001,e.hp/e.d.hp);
     const dx=P.x-e.x,dz=P.z-e.z,dist=Math.hypot(dx,dz),sc=e.d.scale||1;let vx=0,vz=0;
     if(dist<e.d.aggro){vx=dx/dist;vz=dz/dist;S.alert=3}
     else{if((e.wt-=dt)<=0){e.wt=1+Math.random()*2;const a=Math.random()*6.28;e.tx=e.hx+Math.cos(a)*2;e.tz=e.hz+Math.sin(a)*2}
@@ -605,11 +1115,11 @@ function update(dt,t){
     move(e,(vx*e.d.speed+e.kx)*dt,(vz*e.d.speed+e.kz)*dt);e.kx*=Math.pow(.001,dt);e.kz*=Math.pow(.001,dt);
     if(vx||vz)e.m.rotation.y=Math.atan2(vx,vz);
     e.m.position.set(e.x,(vx||vz)?Math.abs(Math.sin(t*8+e.hx))*.08:0,e.z);
-    if(dist<.8*sc)hurt(e.d.dmg,dx,dz)}
+    if(dist<.8*sc&&e.d.dmg>0)hurt(e.d.dmg,dx,dz)}
   // camera (desktop only; headset drives the camera in VR)
   if(!renderer.xr.isPresenting){camTarget.set(P.x,11,P.z+8);camera.position.lerp(camTarget,Math.min(1,dt*5));camera.lookAt(P.x,0,P.z)}
 }
-loadMap(CONFIG.start);refresh();
-say('Welcome, brave cat! Talk to the villagers (!) to find quests.',7);
-renderer.setAnimationLoop(t=>{const dt=Math.min(((t-last)/1000)||0,.05);last=t;update(dt,t/1000);renderer.render(scene,camera)});
+showTitle();
+
+renderer.setAnimationLoop(t=>{const dt=Math.min(((t-last)/1000)||0,.05);last=t;if(!paused)update(dt,t/1000);renderer.render(scene,camera)});
 </script></body></html>
