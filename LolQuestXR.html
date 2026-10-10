@@ -11,11 +11,9 @@ canvas{display:block}
 #hud{left:12px;top:calc(env(safe-area-inset-top,0px) + 12px);max-width:320px}
 #help{left:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);font-size:12px;opacity:.8}
 #msg{left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 70px);transform:translateX(-50%);max-width:70%;display:none}
-#vr{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);padding:12px 22px;font-size:16px;font-weight:700;border:0;border-radius:12px;background:var(--accent);color:#fff;cursor:pointer}
 #quests{position:fixed;right:12px;top:calc(env(safe-area-inset-top,0px) + 12px);max-width:340px;background:var(--panel);border-radius:10px;padding:8px 12px;font-size:13px;line-height:1.45;white-space:pre-line}
 #quests:empty{display:none}
-#mute{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 74px);padding:6px 12px;border:0;border-radius:10px;background:var(--panel);color:#fff;font-size:13px;cursor:pointer}
-body.vr #hud,body.vr #quests,body.vr #msg,body.vr #help,body.vr #mute{display:none!important}
+body.vr #hud,body.vr #quests,body.vr #msg,body.vr #help,body.vr #bar{display:none!important}
 #touch{display:none;position:fixed;inset:0;pointer-events:none;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 body.touch #touch{display:block}
 #joyzone{position:absolute;left:0;bottom:0;width:50%;height:65%;pointer-events:auto;touch-action:none}
@@ -28,14 +26,16 @@ body.touch #touch{display:block}
 #bUse{right:48px;bottom:calc(env(safe-area-inset-bottom,0px) + 170px);width:62px;height:62px;font-size:26px;background:rgba(80,180,90,.8)}
 body.touch #help{display:none}
 body.touch #hud,body.touch #msg,body.touch #quests{pointer-events:none}
-body.touch #vr{right:auto;left:50%;transform:translateX(-50%);padding:8px 14px;font-size:13px}
-body.touch #mute{right:auto;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 58px)}
 body.touch #msg{bottom:calc(env(safe-area-inset-bottom,0px) + 110px)}
 body.vr #touch{display:none!important}
+#bar{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);display:flex;gap:8px;align-items:center}
+#bar button{height:44px;min-width:44px;padding:0 12px;border:0;border-radius:12px;background:var(--panel);color:#fff;font-size:20px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+#bar #vr{background:var(--accent);font-size:15px;font-weight:800;letter-spacing:.5px}
+body.touch #bar{right:auto;left:50%;transform:translateX(-50%)}
 </style></head><body>
-<div id="hud"></div><div id="quests"></div><div id="touch"><div id="joyzone"></div><div id="joy"><div id="knob"></div></div><div class="tb" id="bAtk">⚔️</div><div class="tb" id="bRoll">💨</div><div class="tb" id="bUse">💬</div></div><div id="msg"></div><button id="mute">♪ Music: on</button>
+<div id="hud"></div><div id="quests"></div><div id="touch"><div id="joyzone"></div><div id="joy"><div id="knob"></div></div><div class="tb" id="bAtk">⚔️</div><div class="tb" id="bRoll">💨</div><div class="tb" id="bUse">💬</div></div><div id="msg"></div>
 <div id="help">Move: WASD / stick · Attack: Space / A / trigger · Roll: Shift / B / grip · Talk: E / X / A-B button</div>
-<button id="vr">Enter VR</button>
+<div id="bar"><button id="fs" title="Fullscreen"></button><button id="mute" title="Music (M)">🔊</button><button id="vr" title="Enter VR">VR</button></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 /* ===================== CUSTOMISE EVERYTHING HERE ===================== */
@@ -521,8 +521,8 @@ vb.onclick=async()=>{music.start();const cur=renderer.xr.getSession();if(cur){cu
   if(!navigator.xr){say('WebXR is not available in this browser.');return}
   try{const s=await navigator.xr.requestSession('immersive-vr',{optionalFeatures:['local-floor','bounded-floor']});
     renderer.xr.setReferenceSpaceType('local-floor');await renderer.xr.setSession(s)}catch(e){say('Could not start VR: '+e.message)}};
-renderer.xr.addEventListener('sessionstart',()=>{vb.textContent='Exit VR';applyMode(true)});
-renderer.xr.addEventListener('sessionend',()=>{vb.textContent='Enter VR';applyMode(false)});
+renderer.xr.addEventListener('sessionstart',()=>{vb.textContent='✕ VR';applyMode(true)});
+renderer.xr.addEventListener('sessionend',()=>{vb.textContent='VR';applyMode(false)});
 
 // ---- Music: procedural WebAudio. Adventurous theme normally, suspenseful theme while enemies chase or hit you.
 const music=(()=>{let ac,adv,sus,master,on=true,started=false,combat=false,ta=0,ts=0,sa=0,ss=0;
@@ -551,8 +551,20 @@ const music=(()=>{let ac,adv,sus,master,on=true,started=false,combat=false,ta=0,
     set(c){if(!started||c==combat)return;combat=c;adv.gain.setTargetAtTime(c?0:1,ac.currentTime,.4);sus.gain.setTargetAtTime(c?1:0,ac.currentTime,.3)},
     toggle(){on=!on;if(master)master.gain.setTargetAtTime(on?.3:0,ac.currentTime,.1);return on}}})();
 ['pointerdown','keydown'].forEach(e=>addEventListener(e,()=>music.start()));
-$('mute').onclick=()=>{music.start();$('mute').textContent='♪ Music: '+(music.toggle()?'on':'off')};
+$('mute').onclick=()=>{music.start();$('mute').textContent=music.toggle()?'🔊':'🔇'};
 addEventListener('keydown',e=>{if(e.code=='KeyM')$('mute').click()});
+
+// ---- Fullscreen toggle (icon button, or press F)
+const fsb=$('fs'),de=document.documentElement;
+const FS_SVG=p=>`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${p}"/></svg>`;
+const FS_IN=FS_SVG('M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5'),FS_OUT=FS_SVG('M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5');
+const fsEl=()=>document.fullscreenElement||document.webkitFullscreenElement;
+const fsSync=()=>{fsb.innerHTML=fsEl()?FS_OUT:FS_IN;fsb.title=fsEl()?'Exit fullscreen':'Fullscreen'};
+fsb.onclick=()=>{try{const r=fsEl()?(document.exitFullscreen||document.webkitExitFullscreen).call(document):(de.requestFullscreen||de.webkitRequestFullscreen).call(de);if(r&&r.catch)r.catch(()=>{})}catch(e){}};
+['fullscreenchange','webkitfullscreenchange'].forEach(e=>document.addEventListener(e,fsSync));
+if(!(document.fullscreenEnabled||document.webkitFullscreenEnabled)||!(de.requestFullscreen||de.webkitRequestFullscreen))fsb.style.display='none';
+fsSync();
+addEventListener('keydown',e=>{if(e.code=='KeyF')fsb.onclick()});
 
 // ---- Main loop
 const camTarget=new THREE.Vector3();let last=0;
@@ -582,9 +594,8 @@ function update(dt,t){
     if(it.m.visible){it.m.rotation.y=t*2;it.m.position.y=Math.sin(t*3)*.1;if(Math.hypot(it.x-P.x,it.z-P.z)<.8){it.got=S.got[MAP.name+':'+it.k]=true;it.m.visible=false;progress('collect',it.id)}}}
   // reach quests
   for(const r of rings){const act=qs(r.q.id)=='active';r.m.visible=act;if(act&&Math.hypot(r.q.at.x+.5-P.x,r.q.at.y+.5-P.z)<r.q.at.r){S.q[r.q.id].state='ready';say(`Quest ready: return to ${npcName(r.q.giver)}`)}}
-  // enemies (frozen while you read a quest)
+  // enemies (they still move, but cannot hurt you while you read a quest: see hurt())
   for(const e of enemies){
-    if(S.talk)continue;
     if(e.hp<=0){if((e.rt-=dt)<=0){e.hp=e.d.hp;e.x=e.hx;e.z=e.hz;e.m.visible=true}continue}
     if(e.flash>0&&(e.flash-=dt)<=0)flashE(e,false);
     const dx=P.x-e.x,dz=P.z-e.z,dist=Math.hypot(dx,dz),sc=e.d.scale||1;let vx=0,vz=0;
