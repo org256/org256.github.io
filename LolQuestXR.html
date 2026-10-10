@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Cat Quest XR</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{--bg:#9bd4f5;--panel:rgba(0,0,0,.6);--fg:#fff;--accent:#f0902a;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{margin:0;height:100%;background:var(--bg);overflow:hidden;font-family:system-ui,sans-serif;color:var(--fg)}
+canvas{display:block}
+#hud,#msg,#help{position:fixed;background:var(--panel);border-radius:10px;padding:8px 12px;font-size:14px;line-height:1.4;white-space:pre-line}
+#hud{left:12px;top:calc(env(safe-area-inset-top,0px) + 12px);max-width:320px}
+#help{left:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);font-size:12px;opacity:.8}
+#msg{left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 70px);transform:translateX(-50%);max-width:70%;display:none}
+#vr{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);padding:12px 22px;font-size:16px;font-weight:700;border:0;border-radius:12px;background:var(--accent);color:#fff;cursor:pointer}
+</style></head><body>
+<div id="hud"></div><div id="msg"></div>
+<div id="help">Move: WASD / stick · Attack: Space / A / trigger · Roll: Shift / B / grip · Talk: E / X / A-B button</div>
+<button id="vr">Enter VR</button>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ===================== CUSTOMISE EVERYTHING HERE ===================== */
+const P_=(s,size,pos,color,extra)=>Object.assign({s,size,pos,color},extra||{});
+const CONFIG={
+  // ---- MAP: one character per tile. Edit rows freely; legend below defines each character.
+  legend:{
+    '.':{color:'#5fae4e'}, ',':{color:'#4b9a3f'}, 's':{color:'#e6d08a'}, '=':{color:'#9b7b52'},
+    '~':{color:'#3a7bd5',solid:true},                       // water (blocks movement)
+    '#':{color:'#5fae4e',solid:true,model:'tree'},           // tree
+    'o':{color:'#5fae4e',solid:true,model:'rock'}            // rock
+  },
+  map:[
+"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+"~ssss..#.....,,,,.....##....sssss~~~",
+"~ss...##.....,,,,,.....#....,,..ss~~",
+"~s...###....,,,.o.........,,,,..ss~~",
+"~....##.......,,..........,,,.....s~",
+"~..,,.....====......##....,,..o...s~",
+"~..,,,....=..=.....###.....,,.....s~",
+"~...,.....=..=======.#.....,.....ss~",
+"~.........=..=.....=.......,,,,..s~~",
+"~~~~~.....=..=.....=..o.....,,,,.s~~",
+"~~~~~~....====.....=.........,,..~~~",
+"~~~~~~~.....======.====.......,,.~~~",
+"~~~~~~......=...........=.....o....~",
+"~~.....##...=....,,,....=..........~",
+"~~....###...=...,,,,,...=.....##...~",
+"~~.....#....=....,,,....=....###...~",
+"~~..........==========..=.....##...~",
+"~ss..,,,...........o...=.=.........~",
+"~sss..,,,,.....#.......=..,,,.....s~",
+"~ssss..,,.....##.....o.....,,,...ss~",
+"~~ssss..........,,,,........ssssss~~",
+"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"],
+  spawn:{x:18,y:11},                                        // tile coords
+  playerModel:'cat',
+
+  // ---- NPCs (model, name, tile position, idle line)
+  npcs:[
+    {id:'mayor', name:'Mayor Whiskers', model:'villager', x:16,y:10, idle:'Stay safe out there, brave kitty!'},
+    {id:'fisher',name:'Old Fisher',     model:'villager', x:3, y:19, idle:'The sea is calm today.'},
+    {id:'witch', name:'Hazel',          model:'villager', x:28,y:6,  idle:'Potions need patience.'}
+  ],
+  // ---- Enemy types and where they spawn
+  enemies:{
+    slime:{model:'slime',hp:3, dmg:1,speed:1.6,xp:6, gold:3, aggro:4.5},
+    bat:  {model:'bat',  hp:2, dmg:1,speed:3.2,xp:8, gold:4, aggro:6},
+    golem:{model:'golem',hp:12,dmg:3,speed:1.3,xp:40,gold:25,aggro:5,scale:1.3}
+  },
+  enemySpawns:[
+    {type:'slime',x:24,y:9},{type:'slime',x:26,y:12},{type:'slime',x:14,y:13},{type:'slime',x:9,y:17},
+    {type:'bat',x:27,y:15},{type:'bat',x:8,y:6},{type:'golem',x:32,y:17}
+  ],
+  // ---- Collectable items (only appear while a quest needs them)
+  items:[{id:'fish',model:'fish',x:2,y:17},{id:'fish',model:'fish',x:5,y:20},{id:'fish',model:'fish',x:30,y:20}],
+
+  // ---- QUESTS. type: kill{target,count} | collect{item,count} | talk{target,talkText} | reach{at:{x,y,r},where}
+  // Turn in by talking to the giver again. 'requires' = id of a quest that must be finished first.
+  quests:[
+    {id:'q1',giver:'mayor', title:'Slime Trouble', type:'kill', target:'slime', count:3, reward:{xp:20,gold:10},
+     text:'Slimes are oozing into the village. Defeat 3 of them!', done:'Thank you! The village is safer.'},
+    {id:'q2',giver:'fisher',title:'Lost Catch', type:'collect', item:'fish', count:3, reward:{xp:25,gold:15},
+     text:'My fish washed away. Can you find 3 around the beaches?', done:'Fresh fish! You are a hero.'},
+    {id:'q3',giver:'witch', title:'Special Delivery', type:'talk', target:'mayor', talkText:'Ah, Hazel\'s herbs. Tell her thanks!', reward:{xp:15,gold:20},
+     text:'Please let the Mayor know my herbs are ready.', done:'Wonderful, here is some gold.'},
+    {id:'q4',giver:'fisher',requires:'q2', title:'Scout the Shore', type:'reach', at:{x:31,y:4,r:2}, where:'the north-east shore', reward:{xp:30,gold:20},
+     text:'Scout the north-east shore for me. Is it safe to fish?', done:'Good, the coast is clear.'},
+    {id:'q5',giver:'mayor', requires:'q1', title:'Stone Menace', type:'kill', target:'golem', count:1, reward:{xp:80,gold:60},
+     text:'A golem roams the south-east. Defeat it!', done:'Legendary! You saved us all.'}
+  ],
+
+  // ---- MODELS: arrays of primitive parts, or a function returning a THREE.Group (e.g. load a glTF).
+  // part: {s:'box'|'sphere'|'cone'|'cyl', size:[...], pos:[x,y,z], color, rot:[x,y,z], sc:[x,y,z]}; models face +Z.
+  models:{
+    cat:[P_('box',[.5,.4,.8],[0,.45,0],'#f0902a'),P_('sphere',[.3],[0,.8,.45],'#f0902a'),
+      P_('cone',[.1,.22],[-.16,1.1,.45],'#f0902a'),P_('cone',[.1,.22],[.16,1.1,.45],'#f0902a'),
+      P_('sphere',[.05],[-.12,.86,.72],'#111'),P_('sphere',[.05],[.12,.86,.72],'#111'),
+      P_('box',[.1,.1,.55],[0,.7,-.55],'#d9791a',{rot:[.6,0,0]})],
+    slime:[P_('sphere',[.45],[0,.4,0],'#6bd16b',{sc:[1,.8,1]}),P_('sphere',[.07],[-.15,.55,.38],'#111'),P_('sphere',[.07],[.15,.55,.38],'#111')],
+    bat:[P_('sphere',[.22],[0,1,0],'#6a4c93'),P_('box',[.7,.04,.3],[-.5,1,0],'#4a2f73'),P_('box',[.7,.04,.3],[.5,1,0],'#4a2f73'),
+      P_('sphere',[.04],[-.08,1.05,.18],'#f33'),P_('sphere',[.04],[.08,1.05,.18],'#f33')],
+    golem:[P_('box',[.9,1,.7],[0,.9,0],'#8a8f98'),P_('box',[.5,.45,.5],[0,1.7,0],'#9aa0a8'),
+      P_('box',[.25,.8,.25],[-.65,.9,0],'#7a7f88'),P_('box',[.25,.8,.25],[.65,.9,0],'#7a7f88'),
+      P_('box',[.1,.08,.05],[-.12,1.75,.26],'#f33'),P_('box',[.1,.08,.05],[.12,1.75,.26],'#f33')],
+    villager:[P_('cyl',[.3,.9],[0,.45,0],'#b86bd1'),P_('sphere',[.28],[0,1.1,0],'#f1c9a0'),P_('cone',[.3,.5],[0,1.5,0],'#3b2a6e')],
+    tree:[P_('cyl',[.15,.7],[0,.35,0],'#7a5230'),P_('cone',[.55,1.3],[0,1.3,0],'#2f8f3f'),P_('cone',[.42,1],[0,1.9,0],'#3aa34a')],
+    rock:[P_('sphere',[.45],[0,.25,0],'#8b8b8b',{sc:[1.2,.7,1]})],
+    fish:[P_('box',[.35,.12,.18],[0,.3,0],'#4fc3f7'),P_('cone',[.1,.2],[-.25,.3,0],'#4fc3f7',{rot:[0,0,1.57]})]
+  },
+  player:{hp:10,speed:4.5,rollSpeed:9}
+};
+/* ===================== ENGINE ===================== */
+const $=id=>document.getElementById(id);
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);
+renderer.xr.enabled=true;document.body.appendChild(renderer.domElement);
+const scene=new THREE.Scene();scene.background=new THREE.Color('#9bd4f5');
+const camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,.05,200);
+scene.add(new THREE.HemisphereLight(0xffffff,0x557755,.95));
+const sun=new THREE.DirectionalLight(0xffffff,.7);sun.position.set(5,10,3);scene.add(sun);
+const world=new THREE.Group();scene.add(world);
+addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()});
+
+function makeModel(n){
+  const d=CONFIG.models[n];if(typeof d=='function')return d();
+  const g=new THREE.Group();
+  (d||[]).forEach(p=>{const z=p.size;
+    const geo=p.s=='sphere'?new THREE.SphereGeometry(z[0],14,10):p.s=='cone'?new THREE.ConeGeometry(z[0],z[1],8):
+      p.s=='cyl'?new THREE.CylinderGeometry(z[0],z[0],z[1],10):new THREE.BoxGeometry(z[0],z[1],z[2]);
+    const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:p.color}));
+    m.position.set(...(p.pos||[0,0,0]));if(p.rot)m.rotation.set(...p.rot);if(p.sc)m.scale.set(...p.sc);g.add(m)});
+  return g}
+
+// ---- Map
+const rows=CONFIG.map,W=Math.max(...rows.map(r=>r.length)),H=rows.length;
+const tileAt=(c,r)=>{if(c<0||r<0||c>=W||r>=H)return{solid:true};return CONFIG.legend[rows[r][c]||'~']||CONFIG.legend['.']};
+const solid=(x,z)=>tileAt(Math.floor(x),Math.floor(z)).solid;
+const canStand=(x,z,r=.3)=>!(solid(x-r,z-r)||solid(x+r,z-r)||solid(x-r,z+r)||solid(x+r,z+r));
+const move=(e,dx,dz)=>{if(canStand(e.x+dx,e.z))e.x+=dx;if(canStand(e.x,e.z+dz))e.z+=dz};
+{const ground=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.3,1),new THREE.MeshLambertMaterial({color:0xffffff}),W*H);
+ const o=new THREE.Object3D(),c=new THREE.Color();let i=0;
+ for(let r=0;r<H;r++)for(let q=0;q<W;q++){const t=tileAt(q,r);
+  o.position.set(q+.5,t.solid&&!t.model?-.35:-.15,r+.5);o.updateMatrix();ground.setMatrixAt(i,o.matrix);
+  c.set(t.color).offsetHSL(0,0,(Math.random()-.5)*.04);ground.setColorAt(i++,c);
+  if(t.model){const m=makeModel(t.model);m.position.set(q+.5,0,r+.5);m.rotation.y=Math.random()*6.28;m.scale.setScalar(.85+Math.random()*.3);world.add(m)}}
+ ground.instanceMatrix.needsUpdate=ground.instanceColor.needsUpdate=true;world.add(ground)}
+
+// ---- State
+const S={hp:CONFIG.player.hp,maxhp:CONFIG.player.hp,xp:0,lvl:1,gold:0,q:{},msg:'',msgT:0};
+const Q=id=>CONFIG.quests.find(q=>q.id==id), qs=id=>S.q[id]&&S.q[id].state;
+const avail=q=>!S.q[q.id]&&(!q.requires||qs(q.requires)=='done');
+const npcName=id=>CONFIG.npcs.find(n=>n.id==id).name;
+const say=(t,s=5)=>{S.msg=t;S.msgT=s};
+function gain(xp,gold){S.xp+=xp;S.gold+=gold;while(S.xp>=S.lvl*20){S.xp-=S.lvl*20;S.lvl++;S.maxhp+=2;S.hp=S.maxhp;say('Level up! You are now level '+S.lvl)}}
+
+// ---- Player
+const sp=CONFIG.spawn;
+const P={x:sp.x+.5,z:sp.y+.5,ang:0,atk:0,roll:0,rcd:0,inv:0,kx:0,kz:0,m:makeModel(CONFIG.playerModel)};world.add(P.m);
+const slash=new THREE.Mesh(new THREE.RingGeometry(.25,.9,20).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.7,side:THREE.DoubleSide}));
+slash.visible=false;world.add(slash);
+
+// ---- NPCs / items / enemies / quest markers
+const npcs=CONFIG.npcs.map(n=>{const m=makeModel(n.model);m.position.set(n.x+.5,0,n.y+.5);world.add(m);
+  const mk=new THREE.Mesh(new THREE.OctahedronGeometry(.17).scale(1,1.6,1),new THREE.MeshBasicMaterial({color:0xffd23f}));mk.position.y=2.2;m.add(mk);return Object.assign({m,mk,x:n.x+.5,z:n.y+.5},n)});
+const items=CONFIG.items.map(i=>{const m=makeModel(i.model);m.position.set(i.x+.5,0,i.y+.5);m.visible=false;world.add(m);return Object.assign({m,got:false,x:i.x+.5,z:i.y+.5},i)});
+const rings=CONFIG.quests.filter(q=>q.type=='reach').map(q=>{const m=new THREE.Mesh(new THREE.RingGeometry(q.at.r-.2,q.at.r,32).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffd23f,transparent:true,opacity:.7}));
+  m.position.set(q.at.x+.5,.05,q.at.y+.5);m.visible=false;world.add(m);return{q,m}});
+function spawnEnemy(s){const d=CONFIG.enemies[s.type],m=makeModel(d.model);m.scale.setScalar(d.scale||1);world.add(m);
+  return{type:s.type,d,m,x:s.x+.5,z:s.y+.5,hx:s.x+.5,hz:s.y+.5,tx:s.x+.5,tz:s.y+.5,hp:d.hp,rt:0,flash:0,wt:0,kx:0,kz:0}}
+const enemies=CONFIG.enemySpawns.map(spawnEnemy);
+const flashE=(e,on)=>e.m.traverse(o=>o.material&&o.material.emissive&&o.material.emissive.setHex(on?0xff2222:0));
+
+// ---- Quest logic
+function progress(kind,key){for(const q of CONFIG.quests){const st=S.q[q.id];if(!st||st.state!='active'||q.type!=kind)continue;
+  if((kind=='kill'&&q.target==key)||(kind=='collect'&&q.item==key)){st.prog++;if(st.prog>=q.count){st.state='ready';say(`Quest ready: return to ${npcName(q.giver)}`)}}}}
+function interact(n){
+  const mine=CONFIG.quests.filter(q=>q.giver==n.id),rdy=mine.find(q=>qs(q.id)=='ready');
+  if(rdy){S.q[rdy.id].state='done';gain(rdy.reward.xp,rdy.reward.gold);say(`${n.name}: ${rdy.done||'Well done!'}  (+${rdy.reward.xp} XP, +${rdy.reward.gold} gold)`);return}
+  const tk=CONFIG.quests.find(q=>qs(q.id)=='active'&&q.type=='talk'&&q.target==n.id);
+  if(tk){S.q[tk.id].state='ready';say(`${n.name}: ${tk.talkText||'Hello!'}  Return to ${npcName(tk.giver)}.`);return}
+  const nw=mine.find(avail);if(nw){S.q[nw.id]={state:'active',prog:0};say(`${n.name}: ${nw.text}`);return}
+  const act=mine.find(q=>qs(q.id)=='active');say(`${n.name}: ${act?(act.reminder||act.text):n.idle}`)}
+
+// ---- Combat
+function hurt(d,dx,dz){if(P.inv>0||P.roll>0)return;S.hp-=d;P.inv=1;const m=Math.hypot(dx,dz)||1;P.kx=-dx/m*7;P.kz=-dz/m*7;
+  if(S.hp<=0){S.hp=S.maxhp;S.gold=Math.floor(S.gold/2);P.x=sp.x+.5;P.z=sp.y+.5;say('You fainted! Half your gold is lost.')}}
+function attack(){if(P.atk>0||P.roll>0)return;P.atk=.3;slash.visible=true;const fx=Math.sin(P.ang),fz=Math.cos(P.ang);
+  for(const e of enemies){if(e.hp<=0)continue;const dx=e.x-P.x,dz=e.z-P.z,d=Math.hypot(dx,dz),sc=e.d.scale||1;
+    if(d<1.9*sc&&(dx*fx+dz*fz)/(d||1)>-.1){e.hp-=S.lvl+1;e.flash=.15;flashE(e,true);e.kx=dx/(d||1)*8;e.kz=dz/(d||1)*8;
+      if(e.hp<=0){e.rt=15;e.m.visible=false;gain(e.d.xp,e.d.gold);progress('kill',e.type)}}}}
+
+// ---- Input (keyboard, standard gamepad / Xbox pad, WebXR controllers)
+const keys={},prev={};
+addEventListener('keydown',e=>{keys[e.code]=1;if(e.code=='Space')e.preventDefault()});addEventListener('keyup',e=>keys[e.code]=0);
+const edge=(k,v)=>{const r=v&&!prev[k];prev[k]=v;return r};
+function readInput(){
+  let x=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),z=(keys.KeyS||keys.ArrowDown?1:0)-(keys.KeyW||keys.ArrowUp?1:0);
+  let a=!!(keys.Space||keys.KeyJ),r=!!(keys.ShiftLeft||keys.KeyK),u=!!(keys.KeyE||keys.Enter);
+  const dz=v=>Math.abs(v)>.2?v:0;
+  for(const g of (navigator.getGamepads?navigator.getGamepads():[])){if(!g)continue;const b=g.buttons.map(q=>q.pressed);
+    x+=dz(g.axes[0]||0)+(b[15]?1:0)-(b[14]?1:0);z+=dz(g.axes[1]||0)+(b[13]?1:0)-(b[12]?1:0);
+    a=a||b[0]||b[7]||b[5];r=r||b[1]||b[6]||b[4];u=u||b[2]||b[3]}
+  const s=renderer.xr.getSession();
+  if(s)for(const src of s.inputSources){const g=src.gamepad;if(!g)continue;const b=g.buttons.map(q=>q.pressed);
+    x+=dz(g.axes[2]||0);z+=dz(g.axes[3]||0);a=a||b[0];r=r||b[1];u=u||b[4]||b[5]}
+  const m=Math.hypot(x,z);if(m>1){x/=m;z/=m}
+  return{x,z,a,r:edge('r',r),u:edge('u',u)}}
+
+// ---- HUD (DOM on desktop, canvas panel in VR)
+const pc=document.createElement('canvas');pc.width=512;pc.height=256;const pctx=pc.getContext('2d'),ptex=new THREE.CanvasTexture(pc);
+const panel=new THREE.Mesh(new THREE.PlaneGeometry(1,.5),new THREE.MeshBasicMaterial({map:ptex,transparent:true}));
+panel.position.set(0,1.3,-1.7);panel.visible=false;scene.add(panel);
+let lastTxt='';
+function hudStr(){let t=`❤ ${S.hp}/${S.maxhp}   Lv ${S.lvl}   XP ${S.xp}/${S.lvl*20}   🪙 ${S.gold}`;
+  for(const q of CONFIG.quests){const st=S.q[q.id];if(!st||st.state=='done')continue;
+    const o=st.state=='ready'?`return to ${npcName(q.giver)}`:q.type=='kill'?`defeat ${q.target} ${st.prog}/${q.count}`:q.type=='collect'?`find ${q.item} ${st.prog}/${q.count}`:q.type=='talk'?`talk to ${npcName(q.target)}`:`go to ${q.where||'the marked area'}`;
+    t+=`\n• ${q.title}: ${o}`}return t}
+function refresh(){const t=hudStr()+'|'+S.msg;if(t==lastTxt)return;lastTxt=t;
+  $('hud').textContent=hudStr();const m=$('msg');m.textContent=S.msg;m.style.display=S.msg&&!renderer.xr.isPresenting?'block':'none';
+  const c=pctx;c.clearRect(0,0,512,256);c.fillStyle='rgba(0,0,0,.65)';c.fillRect(0,0,512,256);c.fillStyle='#fff';c.font='20px sans-serif';let y=28;
+  const lines=(hudStr()+(S.msg?'\n\n'+S.msg:'')).split('\n');
+  for(const l of lines){let ln='';for(const w of l.split(' ')){if(c.measureText(ln+w).width>480){c.fillText(ln,16,y);y+=25;ln=''}ln+=w+' '}c.fillText(ln,16,y);y+=25}
+  ptex.needsUpdate=true}
+setInterval(refresh,150);
+
+// ---- VR
+function applyMode(vr){const s=vr?.04:1;world.scale.setScalar(s);world.position.set(vr?-W/2*s:0,vr?.75:0,vr?-1.1-H/2*s:0);
+  scene.background.set(vr?'#1b2a3a':'#9bd4f5');panel.visible=vr;$('hud').style.display=vr?'none':'';lastTxt=''}
+for(let i=0;i<2;i++){const c=renderer.xr.getController(i);c.add(new THREE.Mesh(new THREE.BoxGeometry(.04,.04,.14),new THREE.MeshBasicMaterial({color:0xf0902a})));scene.add(c)}
+const vb=$('vr');
+if(navigator.xr)navigator.xr.isSessionSupported('immersive-vr').then(ok=>{if(!ok){vb.style.opacity=.55;vb.title='VR not available on this device'}}).catch(()=>{});
+else{vb.style.opacity=.55;vb.title='WebXR not available in this browser'}
+vb.onclick=async()=>{const cur=renderer.xr.getSession();if(cur){cur.end();return}
+  if(!navigator.xr){say('WebXR is not available in this browser.');return}
+  try{const s=await navigator.xr.requestSession('immersive-vr',{optionalFeatures:['local-floor','bounded-floor']});
+    renderer.xr.setReferenceSpaceType('local-floor');await renderer.xr.setSession(s)}catch(e){say('Could not start VR: '+e.message)}};
+renderer.xr.addEventListener('sessionstart',()=>{vb.textContent='Exit VR';applyMode(true)});
+renderer.xr.addEventListener('sessionend',()=>{vb.textContent='Enter VR';applyMode(false)});
+
+// ---- Main loop
+const camTarget=new THREE.Vector3();let last=0;
+function update(dt,t){
+  const I=readInput(),cfg=CONFIG.player;
+  P.atk-=dt;P.inv-=dt;P.rcd-=dt;if(S.msgT>0&&(S.msgT-=dt)<=0)S.msg='';
+  if(P.kx||P.kz){move(P,P.kx*dt,P.kz*dt);P.kx*=Math.pow(.001,dt);P.kz*=Math.pow(.001,dt);if(Math.abs(P.kx)+Math.abs(P.kz)<.1)P.kx=P.kz=0}
+  const mv=Math.hypot(I.x,I.z)>.05;
+  if(I.r&&P.roll<=0&&P.rcd<=0){if(mv)P.ang=Math.atan2(I.x,I.z);P.roll=.25;P.rcd=.6}
+  if(P.roll>0){P.roll-=dt;move(P,Math.sin(P.ang)*cfg.rollSpeed*dt,Math.cos(P.ang)*cfg.rollSpeed*dt)}
+  else if(mv){P.ang=Math.atan2(I.x,I.z);move(P,I.x*cfg.speed*dt,I.z*cfg.speed*dt)}
+  if(I.a)attack();
+  if(P.atk<.15)slash.visible=false;
+  slash.position.set(P.x+Math.sin(P.ang),.5,P.z+Math.cos(P.ang));
+  P.m.position.set(P.x,mv?Math.abs(Math.sin(t*12))*.1:0,P.z);P.m.rotation.y=P.ang;P.m.scale.y=P.roll>0?.6:1;P.m.visible=P.inv<=0||Math.floor(t*20)%2==0;
+  // NPCs & interaction
+  let near=null;
+  for(const n of npcs){const d=Math.hypot(n.x-P.x,n.z-P.z);if(d<1.8&&(!near||d<near.d))near={n,d};
+    const ready=CONFIG.quests.some(q=>q.giver==n.id&&qs(q.id)=='ready'),av=CONFIG.quests.some(q=>q.giver==n.id&&avail(q)),tg=CONFIG.quests.some(q=>qs(q.id)=='active'&&q.type=='talk'&&q.target==n.id);
+    n.mk.visible=ready||av||tg;n.mk.material.color.setHex(ready?0x55e07a:tg?0x55b8ff:0xffd23f);n.mk.position.y=2.2+Math.sin(t*3)*.1;n.mk.rotation.y=t*2;
+    n.m.rotation.y=Math.atan2(P.x-n.x,P.z-n.z)*(d<4?1:0)}
+  if(I.u&&near)interact(near.n);
+  // items
+  for(const it of items){it.m.visible=!it.got&&CONFIG.quests.some(q=>qs(q.id)=='active'&&q.type=='collect'&&q.item==it.id);
+    if(it.m.visible){it.m.rotation.y=t*2;it.m.position.y=Math.sin(t*3)*.1;if(Math.hypot(it.x-P.x,it.z-P.z)<.8){it.got=true;it.m.visible=false;progress('collect',it.id)}}}
+  // reach quests
+  for(const r of rings){const act=qs(r.q.id)=='active';r.m.visible=act;if(act&&Math.hypot(r.q.at.x+.5-P.x,r.q.at.y+.5-P.z)<r.q.at.r){S.q[r.q.id].state='ready';say(`Quest ready: return to ${npcName(r.q.giver)}`)}}
+  // enemies
+  for(const e of enemies){
+    if(e.hp<=0){if((e.rt-=dt)<=0){e.hp=e.d.hp;e.x=e.hx;e.z=e.hz;e.m.visible=true}continue}
+    if(e.flash>0&&(e.flash-=dt)<=0)flashE(e,false);
+    const dx=P.x-e.x,dz=P.z-e.z,dist=Math.hypot(dx,dz),sc=e.d.scale||1;let vx=0,vz=0;
+    if(dist<e.d.aggro){vx=dx/dist;vz=dz/dist}
+    else{if((e.wt-=dt)<=0){e.wt=1+Math.random()*2;const a=Math.random()*6.28;e.tx=e.hx+Math.cos(a)*2;e.tz=e.hz+Math.sin(a)*2}
+      const wx=e.tx-e.x,wz=e.tz-e.z,wd=Math.hypot(wx,wz);if(wd>.2){vx=wx/wd*.4;vz=wz/wd*.4}}
+    move(e,(vx*e.d.speed+e.kx)*dt,(vz*e.d.speed+e.kz)*dt);e.kx*=Math.pow(.001,dt);e.kz*=Math.pow(.001,dt);
+    if(vx||vz)e.m.rotation.y=Math.atan2(vx,vz);
+    e.m.position.set(e.x,(vx||vz)?Math.abs(Math.sin(t*8+e.hx))*.08:0,e.z);
+    if(dist<.8*sc)hurt(e.d.dmg,dx,dz)}
+  // camera (desktop only; headset drives the camera in VR)
+  if(!renderer.xr.isPresenting){camTarget.set(P.x,11,P.z+8);camera.position.lerp(camTarget,Math.min(1,dt*5));camera.lookAt(P.x,0,P.z)}
+}
+applyMode(false);camera.position.set(P.x,11,P.z+8);refresh();
+say('Welcome, brave cat! Talk to the villagers (!) to find quests.',7);
+renderer.setAnimationLoop(t=>{const dt=Math.min(((t-last)/1000)||0,.05);last=t;update(dt,t/1000);renderer.render(scene,camera)});
+</script></body></html>
