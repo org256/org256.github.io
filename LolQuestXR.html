@@ -12,8 +12,12 @@ canvas{display:block}
 #help{left:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);font-size:12px;opacity:.8}
 #msg{left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 70px);transform:translateX(-50%);max-width:70%;display:none}
 #vr{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);padding:12px 22px;font-size:16px;font-weight:700;border:0;border-radius:12px;background:var(--accent);color:#fff;cursor:pointer}
+#quests{position:fixed;right:12px;top:calc(env(safe-area-inset-top,0px) + 12px);max-width:340px;background:var(--panel);border-radius:10px;padding:8px 12px;font-size:13px;line-height:1.45;white-space:pre-line}
+#quests:empty{display:none}
+#mute{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 74px);padding:6px 12px;border:0;border-radius:10px;background:var(--panel);color:#fff;font-size:13px;cursor:pointer}
+body.vr #hud,body.vr #quests,body.vr #msg,body.vr #help,body.vr #mute{display:none!important}
 </style></head><body>
-<div id="hud"></div><div id="msg"></div>
+<div id="hud"></div><div id="quests"></div><div id="msg"></div><button id="mute">♪ Music: on</button>
 <div id="help">Move: WASD / stick · Attack: Space / A / trigger · Roll: Shift / B / grip · Talk: E / X / A-B button</div>
 <button id="vr">Enter VR</button>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -23,57 +27,149 @@ const P_=(s,size,pos,color,extra)=>Object.assign({s,size,pos,color},extra||{});
 const CONFIG={
   start:'overworld',
   // ---- MAPS: each has its own tiles (legend + ASCII rows), NPCs, enemies, items and portals.
-  // Map characters: one per tile. Legend sets colour, solid (blocks movement) and an optional model.
+  // Legend keys: color, solid (blocks everyone), water (player can swim, land enemies cannot enter), model (decor), fixed (no random rotation/scale).
   maps:{
   overworld:{title:'Meadow Isle',bg:'#9bd4f5',
-  legend:{
-    '.':{color:'#5fae4e'}, ',':{color:'#4b9a3f'}, 's':{color:'#e6d08a'}, '=':{color:'#9b7b52'},
-    '~':{color:'#3a7bd5',solid:true},                       // water (blocks movement)
-    '#':{color:'#5fae4e',solid:true,model:'tree'},           // tree
-    'o':{color:'#5fae4e',solid:true,model:'rock'}            // rock
-  },
+  legend:{'.':{color:'#5fae4e'},',':{color:'#4b9a3f'},'s':{color:'#e6d08a'},'=':{color:'#9b7b52'},
+    '~':{color:'#3a7bd5',water:true},
+    '#':{color:'#5fae4e',solid:true,model:'tree'},'o':{color:'#5fae4e',solid:true,model:'rock'}},
   map:[
-"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
-"~ssss..#.....,,,,.....##....sssss~~~",
-"~ss...##.....,,,,,.....#....,,..ss~~",
-"~s...###....,,,.o.........,,,,..ss~~",
-"~....##.......,,..........,,,.....s~",
-"~..,,.....====......##....,,..o...s~",
-"~..,,,....=..=.....###.....,,.....s~",
-"~...,.....=..=======.#.....,.....ss~",
-"~.........=..=.....=.......,,,,..s~~",
-"~~~~~.....=..=.....=..o.....,,,,.s~~",
-"~~~~~~....====.....=.........,,..~~~",
-"~~~~~~~.....======.====.......,,.~~~",
-"~~~~~~......=...........=.....o....~",
-"~~.....##...=....,,,....=..........~",
-"~~....###...=...,,,,,...=.....##...~",
-"~~.....#....=....,,,....=....###...~",
-"~~..........==========..=.....##...~",
-"~ss..,,,...........o...=.=.........~",
-"~sss..,,,,.....#.......=..,,,.....s~",
-"~ssss..,,.....##.....o.....,,,...ss~",
-"~~ssss..........,,,,........ssssss~~",
-"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"],
-  spawn:{x:18,y:11},                                        // tile coords
-
-  // ---- NPCs (model, name, tile position, idle line)
-  npcs:[
-    {id:'mayor', name:'Mayor Whiskers', model:'villager', x:16,y:10, idle:'Stay safe out there, brave kitty!'},
-    {id:'fisher',name:'Old Fisher',     model:'villager', x:3, y:19, idle:'The sea is calm today.'},
-    {id:'witch', name:'Hazel',          model:'villager', x:28,y:6,  idle:'Potions need patience.'},
-    {id:'captain',name:'Captain Paws',model:'captain',x:3,y:3,idle:'Yarr, fine sea air today.'},
-    {id:'mama',name:'Mama Mittens',model:'cook',x:20,y:13,idle:'I hope Kit is not in trouble.'},
-    {id:'kit',name:'Kit',model:'kid',x:8,y:2,idle:'Hide and seek is fun!'}
-  ],
-  enemySpawns:[
-    {type:'slime',x:24,y:9},{type:'slime',x:26,y:12},{type:'slime',x:14,y:13},{type:'slime',x:9,y:17},
-    {type:'bat',x:27,y:15},{type:'bat',x:8,y:6},{type:'golem',x:32,y:17}
-  ],
-  // ---- Collectable items (only appear while a quest needs them)
-  items:[{id:'fish',model:'fish',x:2,y:17},{id:'fish',model:'fish',x:5,y:20},{id:'fish',model:'fish',x:30,y:20},{id:'chest',model:'chest',x:2,y:2}],
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~ss~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~sss~~~~~',
+'~~~~~~ssss~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ss.ssss~~',
+'~~~~~ss..sss~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~s.....s~~',
+'~~~~~ss....s~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~s.....s~~',
+'~~~~~~ss..ss~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ss...ss~~',
+'~~~~~~~ssss~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~s..ss~~~',
+'~~~~~~~~ss~~~~~~~~~~~ssssssssssssssssss~~~~~~~~~~~~~~~~~ssss~~~~',
+'~~~~~~~~~~~~~~~~~~~sss.##.............ss~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~ss#.###.....=.#......s~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~ss##.##......=.......sss~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~sss#..###,.....=......ss~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~ssss..#,,,###,....=......s~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~sss.#...#,#,#,,,,...=...o..s~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~ss####...#,,,,,,,,...=......s~~~~~s~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~ss##.#...####,,,,....=......ss~~~sssssss~~~~~~~~~~~~~~~',
+'~~~~~~~~~~s..##...#..#,,......=.......sssss.o...sss~~~~~~~~~~~~~',
+'~~~~~~~~~~ss######............=......#....#.#.....sss~~~~~~~~~~~',
+'~~~~~~~~~~~ss####o.#..........=.....#....#.##.......ss~~~~~~~~~~',
+'~~~~~~~~~~~~s...#####.........=......##.#............ss~~~~~~~~~',
+'~~~~~~~~~~~~s.=.###.#.........=..........##...###.....ss~~~~~~~~',
+'~~~~~~~~~~~~s.=..#.#..........=........####.....###...oss~~~~~~~',
+'~~~~~~~~~~~ss.================.================.#.#.....s~~~~~~~',
+'~~~~~~~~~~~s#.................=...........###...##..#...ss~~~~~~',
+'~~~~~~~~~~ss#....sssssss......=...........##.##..##.#....ssss~~~',
+'~~~~~~~~~ss.#o#..s~~~~~s......=.......,,#,###..###.....ssss,ss~~',
+'~~~~~~~~~s####...s~~~~~s,.....=.......,.##,,##.##.##..ss~~s,,ss~',
+'~~~~~~~~~s.......s~~~~~s,,....=......,..,,###.####.ssss~~~sss,s~',
+'~~~~~~~~~s##....#s~~~~~s,,,...=......,##,#,,#..#ssss~~~~~~~~sss~',
+'~~~~~~~~~s.#...#.s~~~~~s.,....=...#...,,#,,,...ss~~~~~~~~~~~~~~~',
+'~~~~~~~~~s.#...##sssssss......=###..##.#,,....ss~~~~~~~~~~~~~~~~',
+'~~~~~~~~~s.##.###..#..#.#.....=###..###.#.....s~~~~~~~~~~~~~~~~~',
+'~~~ss~~~~s....###..##.#.......=#..#...#..#...ss~~~~~~~~~~~~~~~~~',
+'~~ssssss~s.........#.o#.#.....=...###..#...sss~~~~~~~~~~~~~~~~~~',
+'~~s....sssss..#...#####.......=..###ssssssss~~~~~~~~~~~~~~~~~~~~',
+'~ss.....ss~ss..###ssssssssssss=.sssss~~~~~~~~~~~~~~~~~~~ss~~~~~~',
+'~ss....os~~~sssssss~~~~~~~~~~ssss~~~~~~~~~~~~~~~~~~~~~sssss~~~~~',
+'~~ss.#..s~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~s...s~~~~~',
+'~~~s.o.ss~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ss...s~~~~~',
+'~~~sssss~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ss.,,s~~~~~',
+'~~~~ss~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~sssss~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'],
+  spawn:{x:30,y:24},
+  npcs:[{id:'mayor',name:'Mayor Whiskers',model:'villager',x:28,y:22,idle:'Stay safe out there, brave kitty!'},
+    {id:'mama',name:'Mama Mittens',model:'cook',x:33,y:22,idle:'I hope Kit is not in trouble.'},
+    {id:'witch',name:'Hazel',model:'villager',x:32,y:27,idle:'Potions need patience.'},
+    {id:'fisher',name:'Old Fisher',model:'villager',x:10,y:26,idle:'The sea is calm today.'},
+    {id:'captain',name:'Captain Paws',model:'captain',x:15,y:13,idle:'Yarr, a cat can swim if she must.'},
+    {id:'kit',name:'Kit',model:'kid',x:43,y:33,idle:'Hide and seek is fun!'}],
+  enemySpawns:[{type:'slime',x:22,y:20},{type:'slime',x:39,y:19},{type:'slime',x:24,y:30},{type:'slime',x:36,y:30},{type:'slime',x:19,y:25},{type:'slime',x:44,y:22},{type:'bat',x:34,y:12},{type:'bat',x:16,y:17},{type:'bat',x:42,y:32},{type:'bat',x:26,y:34},{type:'golem',x:45,y:32},{type:'golem',x:13,y:30}],
+  items:[{id:'berry',model:'berry',x:24,y:19},{id:'berry',model:'berry',x:35,y:18},{id:'berry',model:'berry',x:25,y:29},{id:'berry',model:'berry',x:38,y:28},{id:'fish',model:'fish',x:9,y:16},{id:'fish',model:'fish',x:9,y:32},{id:'fish',model:'fish',x:46,y:34},{id:'chest',model:'chest',x:58,y:6,beacon:true}],
   // portals: x,y = tile, to = map name, optional toX,toY = landing tile (default: that map's spawn)
-  portals:[{x:3,y:13,to:'dungeon',color:0x9b5de5},{x:33,y:9,to:'maze',color:0x35c5ff}]
+  portals:[{x:14,y:22,to:'dungeon',color:0x9b5de5},{x:46,y:24,to:'maze',color:0x35c5ff},{x:30,y:11,to:'cave',color:0x6fe04a},{x:30,y:38,to:'ocean',color:0x00e5c8}]
+  },
+  ocean:{title:'Pirate Seas',bg:'#7fc8f0',
+  legend:{'~':{color:'#2a6fc4',water:true},'P':{color:'#8a6a3d'},'s':{color:'#e6d08a'},
+    'r':{color:'#8a6a3d',solid:true,model:'rail',fixed:true},'M':{color:'#8a6a3d',solid:true,model:'mast',fixed:true},
+    'C':{color:'#8a6a3d',solid:true,model:'cabin',fixed:true},'b':{color:'#8a6a3d',solid:true,model:'barrel',fixed:true},
+    '#':{color:'#e6d08a',solid:true,model:'palm'}},
+  map:[
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~ss~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~ssss~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~ss~~~~~~~~~~~~~~~ssss#~~~~~~~~~~~~~~~~s#ss~~~~~~',
+'~~~~~~~sss#~~~~~~~~~~~~~~#s#ss~~~~~~~~~~~~~~~ss#ssss~~~~',
+'~~~~~~ssss#~~~~~~~~~~~~~~~sss~~~~~~~~~~~~~~~~sssss#s~~~~',
+'~~~~~#sssss#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~##sssss~~~~',
+'~~~~~#ssssss~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#sssss#~~~~',
+'~~~~~~#ssss~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#ss#s~~~~~',
+'~~~~~~~~##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#ss#~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~rrrrrrPrrrrrrrrrrrrrrrr~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~rPPbPPPPPPPPPPPbPPPPPPr~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~rPPPPPPPPPPPPPPPPPCCCPr~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~rPPPPMPPPPPPMPPPPPCCCPr~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~rPPPPPPPPPPPPPPPPPCCCPr~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~rPPPPPPPPPPPPPPPPPPPPPr~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~rPPbPPPPbPPPPPPbPPPPPPr~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~rrrrrrPrrrrrrrPrrrrrrrr~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~ss#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~ssss~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#sss~~~~~~~~',
+'~~~~~#s#s#s~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~sss#sss~~~~~~',
+'~~~~~sssssss~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~s#sssss~~~~~~',
+'~~~~~ss#ssss~~~~~~~~~~~~~~~sss~~~~~~~~~~~~~#s##sss~~~~~~',
+'~~~~~~~#sss~~~~~~~~~~~~~~~ssss~~~~~~~~~~~~~sssssss~~~~~~',
+'~~~~~~~~ss~~~~~~~~~~~~~~~#ssss~~~~~~~~~~~~~~ssss#~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~ssss~~~~~~~~~~~~~~~ssss~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~s#s~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+'~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'],
+  spawn:{x:22,y:26},
+  npcs:[{id:'barnacle',name:'Captain Barnacle',model:'pirate',x:31,y:18,idle:'Arr, welcome aboard the Salty Whisker!'},
+    {id:'salty',name:'Salty Pete',model:'pirate',x:24,y:16,idle:'Skeletons give me the shivers.'},
+    {id:'marina',name:'Marina',model:'mermaid',x:12,y:22,idle:'The sea is lovely, is it not?'},
+    {id:'coral',name:'Coral',model:'mermaid',x:42,y:25,idle:'Beware the jellies, land cat.'}],
+  enemySpawns:[{type:'jelly',x:12,y:14},{type:'jelly',x:40,y:10},{type:'jelly',x:44,y:20},{type:'jelly',x:14,y:32},{type:'jelly',x:34,y:28},{type:'jelly',x:50,y:18},{type:'jelly',x:20,y:10}],
+  items:[{id:'pearl',model:'pearl',x:8,y:8},{id:'pearl',model:'pearl',x:48,y:8},{id:'pearl',model:'pearl',x:27,y:4},{id:'crate',model:'crate',x:9,y:29},{id:'crate',model:'crate',x:27,y:31},{id:'crate',model:'crate',x:45,y:31}],
+  portals:[{x:48,y:29,to:'overworld',toX:30,toY:38,color:0x00e5c8}]
+  },
+  cave:{title:'Crystal Cave',bg:'#241b33',
+  legend:{'.':{color:'#4a3f5c'},'#':{color:'#2a2238',solid:true,model:'crystalwall',fixed:true}},
+  map:[
+'################################',
+'################################',
+'##.......###........############',
+'##.......###........###.......##',
+'##.......###..................##',
+'##..................###.......##',
+'##.......###........###.......##',
+'##.......########.#####.......##',
+'#######.#########.#####.......##',
+'#######.#########.#########.####',
+'#######.#########.#########.####',
+'###........###.......######.####',
+'###........###.......######.####',
+'###........###.......###......##',
+'###........###................##',
+'###........###.......###......##',
+'###........###.......###......##',
+'###........###.......###......##',
+'########################......##',
+'################################',
+'################################',
+'################################'],
+  spawn:{x:5,y:5},npcs:[],
+  enemySpawns:[{type:'bat',x:16,y:4},{type:'bat',x:17,y:14},{type:'bat',x:5,y:14},{type:'bat',x:26,y:6},{type:'golem',x:25,y:15}],
+  items:[{id:'crystal',model:'crystal',x:26,y:6},{id:'crystal',model:'crystal',x:7,y:14},{id:'crystal',model:'crystal',x:27,y:16}],
+  portals:[{x:5,y:5,to:'overworld',toX:30,toY:11,color:0x6fe04a}]
   },
   maze:{title:'Hedge Maze',bg:'#9bd4f5',
   legend:{'.':{color:'#c9b27a'},'#':{color:'#c9b27a',solid:true,model:'hedge',fixed:true}},
@@ -94,7 +190,7 @@ const CONFIG={
   spawn:{x:1,y:1},npcs:[],
   enemySpawns:[{type:'slime',x:18,y:3},{type:'slime',x:16,y:1},{type:'slime',x:19,y:5}],
   items:[{id:'prize',model:'trophy',x:5,y:5}],
-  portals:[{x:1,y:1,to:'overworld',toX:33,toY:9,color:0x35c5ff}]
+  portals:[{x:1,y:1,to:'overworld',toX:46,toY:24,color:0x35c5ff}]
   },
   dungeon:{title:'Dungeon',bg:'#14141c',
   legend:{'.':{color:'#3a3a48'},'#':{color:'#1e1e2a',solid:true,model:'wallblock',fixed:true}},
@@ -116,70 +212,109 @@ const CONFIG={
 '#........###.......###.....#',
 '############################'],
   spawn:{x:3,y:3},
-  npcs:[{id:'prisoner',name:'Prisoner',model:'prisoner',x:24,y:12,idle:'Please, get me out of here!'}],
+  npcs:[{id:'prisoner',name:'Prisoner',model:'prisoner',x:24,y:12,idle:'Please, get me out of here!'},
+    {id:'jack',name:'Pirate Jack',model:'pirate',x:5,y:12,idle:'Me cutlass was taken, and me pride!'}],
   enemySpawns:[{type:'skeleton',x:14,y:3},{type:'skeleton',x:23,y:3},{type:'skeleton',x:25,y:5},{type:'skeleton',x:14,y:12},{type:'skeleton',x:15,y:13},{type:'skeleton',x:4,y:12},{type:'skeleton',x:23,y:11}],
   items:[],
-  portals:[{x:3,y:3,to:'overworld',toX:3,toY:13,color:0x9b5de5}]
+  portals:[{x:3,y:3,to:'overworld',toX:14,toY:22,color:0x9b5de5}]
   }
   },
-  // ---- Enemy types
+  // ---- Enemy types (swim:true = water only)
   enemies:{
     slime:{model:'slime',hp:3, dmg:1,speed:1.6,xp:6, gold:3, aggro:4.5},
     bat:  {model:'bat',  hp:2, dmg:1,speed:3.2,xp:8, gold:4, aggro:6},
     golem:{model:'golem',hp:12,dmg:3,speed:1.3,xp:40,gold:25,aggro:5,scale:1.3},
-    skeleton:{model:'skeleton',hp:4,dmg:2,speed:2,xp:12,gold:6,aggro:4.5}
+    skeleton:{model:'skeleton',hp:4,dmg:2,speed:2,xp:12,gold:6,aggro:4.5},
+    jelly:{model:'jelly',hp:3,dmg:1,speed:1.4,xp:10,gold:5,aggro:4.5,swim:true}
   },
-  playerModel:'cat',
+  playerModel:'tabby',
 
-  // ---- QUESTS. type: kill{target,count} | collect{item,count} | talk{target,talkText} | reach{at:{x,y,r},where}
-  // Turn in by talking to the giver again. 'requires' = id of a quest that must be finished first.
+  // ---- QUESTS. diff: 1-3 stars. type: kill{target,count} | collect{item,count} | talk{target,talkText} | reach{at:{x,y,r},where}
+  // map: where it happens (default 'overworld'). Turn in by talking to the giver again. 'requires' = quest id to finish first.
   quests:[
-    {id:'q1',giver:'mayor', title:'Slime Trouble', type:'kill', target:'slime', count:3, reward:{xp:20,gold:10},
-     text:'Slimes are oozing into the village. Defeat 3 of them!', done:'Thank you! The village is safer.'},
-    {id:'q2',giver:'fisher',title:'Lost Catch', type:'collect', item:'fish', count:3, reward:{xp:25,gold:15},
-     text:'My fish washed away. Can you find 3 around the beaches?', done:'Fresh fish! You are a hero.'},
-    {id:'q3',giver:'witch', title:'Special Delivery', type:'talk', target:'mayor', talkText:'Ah, Hazel\'s herbs. Tell her thanks!', reward:{xp:15,gold:20},
-     text:'Please let the Mayor know my herbs are ready.', done:'Wonderful, here is some gold.'},
-    {id:'q4',giver:'fisher',requires:'q2', title:'Scout the Shore', type:'reach', at:{x:31,y:4,r:2}, where:'the north-east shore', reward:{xp:30,gold:20},
-     text:'Scout the north-east shore for me. Is it safe to fish?', done:'Good, the coast is clear.'},
-    {id:'q5',giver:'mayor', requires:'q1', title:'Stone Menace', type:'kill', target:'golem', count:1, reward:{xp:80,gold:60},
-     text:'A golem roams the south-east. Defeat it!', done:'Legendary! You saved us all.'},
-    {id:'q6',giver:'captain',title:'Buried Treasure',type:'collect',item:'chest',count:1,reward:{xp:35,gold:50},
-     text:'Arr! A treasure chest lies hidden on the north-west beach. Find it!',done:'Shiver me whiskers, the chest! Here is your share.'},
-    {id:'q7',giver:'mama',title:'Dinner Time',type:'talk',target:'kit',talkText:'Dinner is ready? Yay, I am coming home!',reward:{xp:20,gold:15},
-     text:'My son Kit wandered off again. Find him and tell him dinner is ready!',done:'Thank you for fetching him. Please take this.'},
-    {id:'q8',giver:'mayor',requires:'q1',title:'Free the Prisoner',type:'talk',target:'prisoner',map:'dungeon',talkText:'You freed me! Thank you, brave cat!',reward:{xp:60,gold:40},
+    // ★ easy
+    {id:'e1',giver:'mama',diff:1,title:'Berry Basket',type:'collect',item:'berry',count:4,reward:{xp:10,gold:5},
+     text:'Could you pick 4 red berries from the bushes around the village?',done:'Delicious! Thank you, dear.'},
+    {id:'q2',giver:'fisher',diff:1,title:'Lost Catch',type:'collect',item:'fish',count:3,reward:{xp:15,gold:10},
+     text:'My fish washed away. Can you find 3 of them on the beaches around the island?',done:'Fresh fish! You are a hero.'},
+    {id:'q3',giver:'witch',diff:1,title:'Special Delivery',type:'talk',target:'mayor',talkText:'Ah, the herbs. Tell Hazel thanks!',reward:{xp:15,gold:15},
+     text:'Please let the Mayor know my herbs are ready.',done:'Wonderful, here is some gold.'},
+    {id:'q7',giver:'mama',requires:'e1',diff:1,title:'Dinner Time',type:'talk',target:'kit',talkText:'Dinner is ready? Yay, I am coming home!',reward:{xp:20,gold:15},
+     text:'My son Kit wandered off again, probably into the forest. Find him and tell him dinner is ready!',done:'Thank you for fetching him.'},
+    // ★★ medium
+    {id:'q1',giver:'mayor',diff:2,title:'Slime Trouble',type:'kill',target:'slime',count:5,reward:{xp:30,gold:15},
+     text:'Slimes are oozing into the village. Defeat 5 of them!',done:'Thank you! The village is safer.'},
+    {id:'q4',giver:'fisher',requires:'q2',diff:2,title:'Scout the Shore',type:'reach',at:{x:47,y:17,r:3},where:'the north-east shore',reward:{xp:30,gold:20},
+     text:'Scout the north-east shore for me. Is it safe to fish?',done:'Good, the coast is clear.'},
+    {id:'q8',giver:'mayor',requires:'q1',diff:2,title:'Free the Prisoner',type:'talk',target:'prisoner',map:'dungeon',talkText:'You freed me! Thank you, brave cat!',reward:{xp:60,gold:40},
      text:'An innocent cat is locked in the dungeon. Step through the purple portal in the west, beat the skeletons and release the prisoner!',done:'Justice is served. Well done!'},
-    {id:'q9',giver:'witch',requires:'q3',title:'Maze Prize',type:'collect',item:'prize',count:1,map:'maze',reward:{xp:60,gold:50},
-     text:'Enter the blue portal in the east and finish the hedge maze. A prize waits at the end, bring it to me!',done:'The golden trophy! Magnificent.'}
+    {id:'q9',giver:'witch',requires:'q3',diff:2,title:'Maze Prize',type:'collect',item:'prize',count:1,map:'maze',reward:{xp:60,gold:50},
+     text:'Enter the blue portal in the east and finish the hedge maze. A prize waits at the end, bring it to me!',done:'The golden trophy! Magnificent.'},
+    {id:'p1',giver:'barnacle',diff:2,title:'Cargo Overboard',type:'collect',item:'crate',count:3,map:'ocean',reward:{xp:40,gold:40},
+     text:'Me cargo crates washed up on the little islands. Fetch 3 of them, matey!',done:'Yo ho ho! Me cargo is safe.'},
+    {id:'p2',giver:'barnacle',requires:'p1',diff:2,title:'Rescue My Matey',type:'talk',target:'jack',map:'dungeon',talkText:'Ahoy! Thanks for the rescue! Tell the Captain I am safe.',reward:{xp:60,gold:60},
+     text:'Me fellow pirate Jack be locked in a dungeon cell! Take the purple portal in the west and set him free.',done:'Jack is free! Here is a reward for ye.'},
+    {id:'m1',giver:'marina',diff:2,title:'Lost Pearls',type:'collect',item:'pearl',count:3,map:'ocean',reward:{xp:40,gold:30},
+     text:'My pearls scattered across the islands. Please find 3 of them!',done:'My pearls! You are a friend of the sea.'},
+    {id:'m2',giver:'coral',diff:2,title:'Jellyfish Menace',type:'kill',target:'jelly',count:4,map:'ocean',reward:{xp:50,gold:30},
+     text:'Stinging jellyfish are scaring my sisters. Defeat 4 of them!',done:'The water is peaceful again.'},
+    // ★★★ hard
+    {id:'q5',giver:'mayor',requires:'q8',diff:3,title:'Stone Menace',type:'kill',target:'golem',count:1,reward:{xp:80,gold:60},
+     text:'A golem roams the island. Defeat it!',done:'Legendary! You saved us all.'},
+    {id:'g1',giver:'mayor',requires:'q5',diff:3,title:'Golem Rampage',type:'kill',target:'golem',count:2,reward:{xp:150,gold:120},
+     text:'More golems have awakened, in the wild and in the caves. Defeat 2 more!',done:'You are the hero of Meadow Isle!'},
+    {id:'q6',giver:'captain',diff:3,title:'Buried Treasure',type:'collect',item:'chest',count:1,reward:{xp:100,gold:150},
+     text:'Arr! A treasure chest lies on a hidden island far to the north-east. Swim there, follow the golden beam of light and bring it back!',done:'Shiver me whiskers, the chest! Here is your share.'},
+    {id:'c1',giver:'witch',requires:'q9',diff:3,title:'Crystal Hunt',type:'collect',item:'crystal',count:3,map:'cave',reward:{xp:120,gold:90},
+     text:'I need 3 magic crystals from the green portal cave in the north. Beware the golem!',done:'Beautiful crystals! My potions will shine.'},
+    {id:'s1',giver:'salty',requires:'p1',diff:3,title:'Dungeon Cleanup',type:'kill',target:'skeleton',count:6,map:'dungeon',reward:{xp:110,gold:100},
+     text:'Skeletons took over the dungeon! Beat 6 of them for me. Use the purple portal in the west.',done:'Me knees stopped shaking. Thank ye!'}
   ],
 
   // ---- MODELS: arrays of primitive parts, or a function returning a THREE.Group (e.g. load a glTF).
   // part: {s:'box'|'sphere'|'cone'|'cyl', size:[...], pos:[x,y,z], color, rot:[x,y,z], sc:[x,y,z]}; models face +Z.
   models:{
-    cat:[P_('box',[.5,.4,.8],[0,.45,0],'#f0902a'),P_('sphere',[.3],[0,.8,.45],'#f0902a'),
-      P_('cone',[.1,.22],[-.16,1.1,.45],'#f0902a'),P_('cone',[.1,.22],[.16,1.1,.45],'#f0902a'),
-      P_('sphere',[.05],[-.12,.86,.72],'#111'),P_('sphere',[.05],[.12,.86,.72],'#111'),
-      P_('box',[.1,.1,.55],[0,.7,-.55],'#d9791a',{rot:[.6,0,0]})],
+    tabby:[P_('box',[.5,.4,.8],[0,.45,0],'#c98f52'),
+      ...[-.28,-.08,.12,.32].map(z=>P_('box',[.52,.42,.07],[0,.45,z],'#4a2f18')),        // body stripes
+      ...[[-.17,-.28],[.17,-.28],[-.17,.28],[.17,.28]].map(([x,z])=>P_('box',[.12,.28,.12],[x,.14,z],'#c98f52')),
+      P_('sphere',[.3],[0,.8,.45],'#c98f52'),P_('sphere',[.1],[0,.74,.72],'#f3e0c8'),
+      P_('cone',[.1,.22],[-.16,1.08,.45],'#c98f52'),P_('cone',[.1,.22],[.16,1.08,.45],'#c98f52'),
+      P_('box',[.035,.1,.035],[-.07,1.08,.52],'#4a2f18'),P_('box',[.035,.12,.035],[0,1.1,.52],'#4a2f18'),P_('box',[.035,.1,.035],[.07,1.08,.52],'#4a2f18'),  // forehead stripes
+      P_('sphere',[.05],[-.12,.86,.72],'#2ecc71'),P_('sphere',[.05],[.12,.86,.72],'#2ecc71'),P_('sphere',[.03],[0,.78,.8],'#e88fa0'),
+      ...[[.65,-.45,'#c98f52'],[.73,-.55,'#4a2f18'],[.82,-.65,'#c98f52'],[.92,-.72,'#4a2f18']].map(([y,z,c])=>P_('box',[.1,.1,.15],[0,y,z],c))],  // ringed tail
     slime:[P_('sphere',[.45],[0,.4,0],'#6bd16b',{sc:[1,.8,1]}),P_('sphere',[.07],[-.15,.55,.38],'#111'),P_('sphere',[.07],[.15,.55,.38],'#111')],
     bat:[P_('sphere',[.22],[0,1,0],'#6a4c93'),P_('box',[.7,.04,.3],[-.5,1,0],'#4a2f73'),P_('box',[.7,.04,.3],[.5,1,0],'#4a2f73'),
       P_('sphere',[.04],[-.08,1.05,.18],'#f33'),P_('sphere',[.04],[.08,1.05,.18],'#f33')],
     golem:[P_('box',[.9,1,.7],[0,.9,0],'#8a8f98'),P_('box',[.5,.45,.5],[0,1.7,0],'#9aa0a8'),
       P_('box',[.25,.8,.25],[-.65,.9,0],'#7a7f88'),P_('box',[.25,.8,.25],[.65,.9,0],'#7a7f88'),
       P_('box',[.1,.08,.05],[-.12,1.75,.26],'#f33'),P_('box',[.1,.08,.05],[.12,1.75,.26],'#f33')],
+    skeleton:[P_('box',[.35,.6,.2],[0,.8,0],'#e8e8e0'),P_('sphere',[.22],[0,1.3,0],'#f2f2ea'),P_('box',[.08,.5,.08],[-.1,.25,0],'#e8e8e0'),P_('box',[.08,.5,.08],[.1,.25,0],'#e8e8e0'),
+      P_('sphere',[.045],[-.08,1.33,.18],'#111'),P_('sphere',[.045],[.08,1.33,.18],'#111')],
+    jelly:[P_('sphere',[.35],[0,.6,0],'#ff8fd0',{sc:[1,.7,1]}),...[-.15,0,.15].map(x=>P_('cyl',[.03,.5],[x,.25,0],'#ff6fb8'))],
     villager:[P_('cyl',[.3,.9],[0,.45,0],'#b86bd1'),P_('sphere',[.28],[0,1.1,0],'#f1c9a0'),P_('cone',[.3,.5],[0,1.5,0],'#3b2a6e')],
-    tree:[P_('cyl',[.15,.7],[0,.35,0],'#7a5230'),P_('cone',[.55,1.3],[0,1.3,0],'#2f8f3f'),P_('cone',[.42,1],[0,1.9,0],'#3aa34a')],
-    rock:[P_('sphere',[.45],[0,.25,0],'#8b8b8b',{sc:[1.2,.7,1]})],
-    fish:[P_('box',[.35,.12,.18],[0,.3,0],'#4fc3f7'),P_('cone',[.1,.2],[-.25,.3,0],'#4fc3f7',{rot:[0,0,1.57]})],
-    skeleton:[P_('box',[.35,.6,.2],[0,.8,0],'#e8e8e0'),P_('sphere',[.22],[0,1.3,0],'#f2f2ea'),P_('box',[.08,.5,.08],[-.1,.25,0],'#e8e8e0'),P_('box',[.08,.5,.08],[.1,.25,0],'#e8e8e0'),P_('sphere',[.045],[-.08,1.33,.18],'#111'),P_('sphere',[.045],[.08,1.33,.18],'#111')],
-    chest:[P_('box',[.55,.3,.38],[0,.15,0],'#8b5a2b'),P_('box',[.55,.12,.38],[0,.36,0],'#a0692f'),P_('sphere',[.06],[0,.3,.2],'#ffd23f')],
-    trophy:[P_('cyl',[.2,.1],[0,.05,0],'#c9961a'),P_('cyl',[.06,.3],[0,.25,0],'#ffd23f'),P_('cyl',[.22,.3],[0,.55,0],'#ffd23f')],
     kid:[P_('cyl',[.2,.6],[0,.3,0],'#3fa7d6'),P_('sphere',[.22],[0,.8,0],'#f1c9a0'),P_('cone',[.22,.25],[0,1.08,0],'#d64545')],
     cook:[P_('cyl',[.32,.9],[0,.45,0],'#e8e8e8'),P_('sphere',[.28],[0,1.1,0],'#f1c9a0'),P_('cyl',[.22,.35],[0,1.5,0],'#ffffff')],
     captain:[P_('cyl',[.3,.9],[0,.45,0],'#2a4d8f'),P_('sphere',[.28],[0,1.1,0],'#f1c9a0'),P_('cone',[.38,.3],[0,1.5,0],'#1a1a1a')],
+    pirate:[P_('cyl',[.3,.9],[0,.45,0],'#7a1f1f'),P_('sphere',[.28],[0,1.1,0],'#f1c9a0'),P_('box',[.62,.06,.5],[0,1.38,0],'#111'),P_('cone',[.25,.25],[0,1.5,0],'#111'),P_('sphere',[.06],[.1,1.15,.25],'#111')],
+    mermaid:[P_('cone',[.3,.8],[0,.2,0],'#2ec4b6',{rot:[Math.PI,0,0]}),P_('box',[.5,.05,.2],[0,-.15,0],'#2ec4b6'),P_('cyl',[.22,.5],[0,.8,0],'#f1c9a0'),P_('sphere',[.22],[0,1.2,0],'#f1c9a0'),P_('sphere',[.25],[0,1.25,-.06],'#ff5fa2')],
     prisoner:[P_('cyl',[.3,.9],[0,.45,0],'#e8832a'),P_('sphere',[.28],[0,1.1,0],'#f1c9a0'),P_('box',[.5,.06,.5],[0,.03,0],'#444')],
+    tree:[P_('cyl',[.15,.7],[0,.35,0],'#7a5230'),P_('cone',[.55,1.3],[0,1.3,0],'#2f8f3f'),P_('cone',[.42,1],[0,1.9,0],'#3aa34a')],
+    rock:[P_('sphere',[.45],[0,.25,0],'#8b8b8b',{sc:[1.2,.7,1]})],
+    palm:[P_('cyl',[.1,1.3],[0,.65,0],'#8a6a3d'),P_('sphere',[.5],[0,1.4,0],'#2f9e44',{sc:[1.3,.5,1.3]})],
+    rail:[P_('box',[1,.5,1],[0,.25,0],'#6b4a26')],
+    mast:[P_('box',[1,.4,1],[0,.2,0],'#6b4a26'),P_('cyl',[.12,3],[0,1.5,0],'#5a3b1a'),P_('box',[1.8,1.5,.05],[0,2.2,0],'#f4efe0')],
+    cabin:[P_('box',[1,1.3,1],[0,.65,0],'#7a5230'),P_('box',[1.1,.12,1.1],[0,1.36,0],'#5a3b1a')],
+    barrel:[P_('cyl',[.32,.6],[0,.3,0],'#8a5a2b')],
     wallblock:[P_('box',[1,1.4,1],[0,.7,0],'#55556a')],
-    hedge:[P_('box',[1,1.1,1],[0,.55,0],'#2e8b3a')]
+    hedge:[P_('box',[1,1.1,1],[0,.55,0],'#2e8b3a')],
+    crystalwall:[P_('box',[1,1.3,1],[0,.65,0],'#3b3050'),P_('cone',[.2,.7],[.15,1.6,.1],'#8e5bd9')],
+    fish:[P_('box',[.35,.12,.18],[0,.3,0],'#4fc3f7'),P_('cone',[.1,.2],[-.25,.3,0],'#4fc3f7',{rot:[0,0,1.57]})],
+    chest:[P_('box',[.55,.3,.38],[0,.15,0],'#8b5a2b'),P_('box',[.55,.12,.38],[0,.36,0],'#a0692f'),P_('sphere',[.06],[0,.3,.2],'#ffd23f')],
+    trophy:[P_('cyl',[.2,.1],[0,.05,0],'#c9961a'),P_('cyl',[.06,.3],[0,.25,0],'#ffd23f'),P_('cyl',[.22,.3],[0,.55,0],'#ffd23f')],
+    berry:[P_('sphere',[.12],[-.1,.15,0],'#d6204a'),P_('sphere',[.12],[.1,.15,.05],'#d6204a'),P_('sphere',[.12],[0,.15,-.1],'#d6204a')],
+    pearl:[P_('sphere',[.13],[0,.35,0],'#f6f1ff')],
+    crate:[P_('box',[.5,.5,.5],[0,.25,0],'#a67c52')],
+    crystal:[P_('cone',[.18,.7],[0,.4,0],'#b678ff'),P_('cone',[.12,.4],[.15,.25,.05],'#d9b3ff')]
   },
   player:{hp:10,speed:4.5,rollSpeed:9}
 };
@@ -207,17 +342,25 @@ function makeModel(n){
 
 // ---- Map
 let rows=[],W=1,H=1,MAP;
-const tileAt=(c,r)=>{if(c<0||r<0||c>=W||r>=H)return{solid:true};return MAP.legend[rows[r][c]||'~']||MAP.legend['.']};
-const solid=(x,z)=>tileAt(Math.floor(x),Math.floor(z)).solid;
-const canStand=(x,z,r=.3)=>!(solid(x-r,z-r)||solid(x+r,z-r)||solid(x-r,z+r)||solid(x+r,z+r));
-const move=(e,dx,dz)=>{if(canStand(e.x+dx,e.z))e.x+=dx;if(canStand(e.x,e.z+dz))e.z+=dz};
-function buildGround(){const ground=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.3,1),new THREE.MeshLambertMaterial({color:0xffffff}),W*H);
+const tileAt=(c,r)=>{if(c<0||r<0||c>=W||r>=H)return{solid:true};return MAP.legend[rows[r][c]||'~']||MAP.legend['.']||MAP.legend['~']};
+const solid=(x,z,k)=>{const t=tileAt(Math.floor(x),Math.floor(z));return t.solid||(k==1&&t.water)||(k==2&&!t.water)};  // k: 0 player, 1 land enemy, 2 swimmer
+const canStand=(x,z,r=.3,k=0)=>!(solid(x-r,z-r,k)||solid(x+r,z-r,k)||solid(x-r,z+r,k)||solid(x+r,z+r,k));
+const move=(e,dx,dz)=>{const k=e.k||0;if(canStand(e.x+dx,e.z,.3,k))e.x+=dx;if(canStand(e.x,e.z+dz,.3,k))e.z+=dz};
+function mergeStatic(grp){grp.updateMatrixWorld(true);const bk={};
+  grp.traverse(o=>{if(!o.isMesh)return;const g=o.geometry.clone();g.applyMatrix4(o.matrixWorld);const k=o.material.color.getHex();(bk[k]=bk[k]||[]).push(g.index?g.toNonIndexed():g)});
+  const out=new THREE.Group();
+  for(const k in bk){const gs=bk[k];let n=0;gs.forEach(g=>n+=g.attributes.position.count);const pos=new Float32Array(n*3),nor=new Float32Array(n*3);let o=0;
+    gs.forEach(g=>{pos.set(g.attributes.position.array,o);nor.set(g.attributes.normal.array,o);o+=g.attributes.position.count*3});
+    const mg=new THREE.BufferGeometry();mg.setAttribute('position',new THREE.BufferAttribute(pos,3));mg.setAttribute('normal',new THREE.BufferAttribute(nor,3));
+    out.add(new THREE.Mesh(mg,new THREE.MeshLambertMaterial({color:+k})))}
+  return out}
+function buildGround(){const dec=new THREE.Group(),ground=new THREE.InstancedMesh(new THREE.BoxGeometry(1,.3,1),new THREE.MeshLambertMaterial({color:0xffffff}),W*H);
  const o=new THREE.Object3D(),c=new THREE.Color();let i=0;
  for(let r=0;r<H;r++)for(let q=0;q<W;q++){const t=tileAt(q,r);
-  o.position.set(q+.5,t.solid&&!t.model?-.35:-.15,r+.5);o.updateMatrix();ground.setMatrixAt(i,o.matrix);
+  o.position.set(q+.5,(t.solid&&!t.model)||t.water?-.35:-.15,r+.5);o.updateMatrix();ground.setMatrixAt(i,o.matrix);
   c.set(t.color).offsetHSL(0,0,(Math.random()-.5)*.04);ground.setColorAt(i++,c);
-  if(t.model){const m=makeModel(t.model);m.position.set(q+.5,0,r+.5);if(!t.fixed){m.rotation.y=Math.random()*6.28;m.scale.setScalar(.85+Math.random()*.3)}world.add(m)}}
- ground.instanceMatrix.needsUpdate=ground.instanceColor.needsUpdate=true;world.add(ground)}
+  if(t.model){const m=makeModel(t.model);m.position.set(q+.5,0,r+.5);if(!t.fixed){m.rotation.y=Math.random()*6.28;m.scale.setScalar(.85+Math.random()*.3)}dec.add(m)}}
+ ground.instanceMatrix.needsUpdate=ground.instanceColor.needsUpdate=true;world.add(ground);world.add(mergeStatic(dec))}
 
 // ---- State
 const S={hp:CONFIG.player.hp,maxhp:CONFIG.player.hp,xp:0,lvl:1,gold:0,q:{},got:{},msg:'',msgT:0,talk:false};
@@ -229,17 +372,18 @@ function gain(xp,gold){S.xp+=xp;S.gold+=gold;while(S.xp>=S.lvl*20){S.xp-=S.lvl*2
 
 // ---- Player
 const P={x:0,z:0,ang:0,atk:0,roll:0,rcd:0,inv:0,kx:0,kz:0,m:makeModel(CONFIG.playerModel)};world.add(P.m);
+const rip=new THREE.Mesh(new THREE.RingGeometry(.35,.5,20).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.6}));rip.position.y=.3;rip.visible=false;P.m.add(rip);
 const slash=new THREE.Mesh(new THREE.RingGeometry(.25,.9,20).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.7,side:THREE.DoubleSide}));
 slash.visible=false;world.add(slash);
 
 // ---- NPCs / items / enemies / quest markers
 const mkNpcs=()=>MAP.npcs.map(n=>{const m=makeModel(n.model);m.position.set(n.x+.5,0,n.y+.5);world.add(m);
   const mk=new THREE.Mesh(new THREE.OctahedronGeometry(.17).scale(1,1.6,1),new THREE.MeshBasicMaterial({color:0xffd23f}));mk.position.y=2.2;m.add(mk);return Object.assign({},n,{m,mk,x:n.x+.5,z:n.y+.5})});
-const mkItems=()=>(MAP.items||[]).map((i,k)=>{const m=makeModel(i.model);m.position.set(i.x+.5,0,i.y+.5);m.visible=false;world.add(m);return Object.assign({},i,{m,k,got:!!S.got[MAP.name+':'+k],x:i.x+.5,z:i.y+.5})});
+const mkItems=()=>(MAP.items||[]).map((i,k)=>{const m=makeModel(i.model);m.position.set(i.x+.5,0,i.y+.5);m.visible=false;world.add(m);if(i.beacon){const b=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,16,10),new THREE.MeshBasicMaterial({color:0xffe066,transparent:true,opacity:.4}));b.position.y=8;m.add(b)}return Object.assign({},i,{m,k,got:!!S.got[MAP.name+':'+k],x:i.x+.5,z:i.y+.5})});
 const mkRings=()=>CONFIG.quests.filter(q=>q.type=='reach'&&(q.map||'overworld')==MAP.name).map(q=>{const m=new THREE.Mesh(new THREE.RingGeometry(q.at.r-.2,q.at.r,32).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xffd23f,transparent:true,opacity:.7}));
   m.position.set(q.at.x+.5,.05,q.at.y+.5);m.visible=false;world.add(m);return{q,m}});
 function spawnEnemy(s){const d=CONFIG.enemies[s.type],m=makeModel(d.model);m.scale.setScalar(d.scale||1);world.add(m);
-  return{type:s.type,d,m,x:s.x+.5,z:s.y+.5,hx:s.x+.5,hz:s.y+.5,tx:s.x+.5,tz:s.y+.5,hp:d.hp,rt:0,flash:0,wt:0,kx:0,kz:0}}
+  return{type:s.type,d,k:d.swim?2:1,m,x:s.x+.5,z:s.y+.5,hx:s.x+.5,hz:s.y+.5,tx:s.x+.5,tz:s.y+.5,hp:d.hp,rt:0,flash:0,wt:0,kx:0,kz:0}}
 const mkEnemies=()=>(MAP.enemySpawns||[]).map(spawnEnemy);
 const flashE=(e,on)=>e.m.traverse(o=>o.material&&o.material.emissive&&o.material.emissive.setHex(on?0xff2222:0));
 
@@ -271,7 +415,7 @@ function interact_(n){
   const act=mine.find(q=>qs(q.id)=='active');say(`${n.name}: ${act?(act.reminder||act.text):n.idle}`)}
 
 // ---- Combat
-function hurt(d,dx,dz){if(P.inv>0||P.roll>0||S.talk)return;S.hp-=d;P.inv=1;const m=Math.hypot(dx,dz)||1;P.kx=-dx/m*7;P.kz=-dz/m*7;
+function hurt(d,dx,dz){if(P.inv>0||P.roll>0||S.talk)return;S.hp-=d;P.inv=1;S.alert=6;const m=Math.hypot(dx,dz)||1;P.kx=-dx/m*7;P.kz=-dz/m*7;
   if(S.hp<=0){S.hp=S.maxhp;S.gold=Math.floor(S.gold/2);P.x=MAP.spawn.x+.5;P.z=MAP.spawn.y+.5;say('You fainted! Half your gold is lost.')}}
 function attack(){if(P.atk>0||P.roll>0)return;P.atk=.3;slash.visible=true;const fx=Math.sin(P.ang),fz=Math.cos(P.ang);
   for(const e of enemies){if(e.hp<=0)continue;const dx=e.x-P.x,dz=e.z-P.z,d=Math.hypot(dx,dz),sc=e.d.scale||1;
@@ -295,31 +439,39 @@ function readInput(){
   const m=Math.hypot(x,z);if(m>1){x/=m;z/=m}
   return{x,z,a,r:edge('r',r),u:edge('u',u)}}
 
-// ---- HUD (DOM on desktop, canvas panel in VR)
-const pc=document.createElement('canvas');pc.width=512;pc.height=256;const pctx=pc.getContext('2d'),ptex=new THREE.CanvasTexture(pc);
-const panel=new THREE.Mesh(new THREE.PlaneGeometry(1,.5),new THREE.MeshBasicMaterial({map:ptex,transparent:true}));
-panel.position.set(0,1.3,-1.7);panel.visible=false;scene.add(panel);
+// ---- HUD: DOM panels on desktop, two canvas boards in VR (stats/messages + quest board)
+function mkPanel(w,h,px,py,pz,ry){const cv=document.createElement('canvas');cv.width=w;cv.height=h;const t=new THREE.CanvasTexture(cv);
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(w/512,h/512),new THREE.MeshBasicMaterial({map:t,transparent:true}));
+  m.position.set(px,py,pz);m.rotation.y=ry;m.visible=false;scene.add(m);return{c:cv.getContext('2d'),t,m,w,h}}
+const pnl=mkPanel(512,256,0,1.3,-1.9,0),qpn=mkPanel(512,384,-1.7,1.2,-1.2,.9);
+function paint(p,txt){const c=p.c;c.clearRect(0,0,p.w,p.h);c.fillStyle='rgba(0,0,0,.65)';c.fillRect(0,0,p.w,p.h);c.fillStyle='#fff';c.font='20px sans-serif';let y=28;
+  for(const l of txt.split('\n')){let ln='';for(const w of l.split(' ')){if(c.measureText(ln+w).width>p.w-32){c.fillText(ln,16,y);y+=25;ln=''}ln+=w+' '}c.fillText(ln,16,y);y+=25}p.t.needsUpdate=true}
+const DIRS=['N','NE','E','SE','S','SW','W','NW'];
+function hintFor(q){if((q.map||'overworld')!=MAP.name)return` (${CONFIG.maps[q.map].title})`;let tg=null;
+  if(q.type=='reach')tg={x:q.at.x+.5,z:q.at.y+.5};
+  else if(q.type=='collect'){const it=items.find(i=>i.id==q.item&&!i.got&&i.beacon);if(it)tg={x:it.x,z:it.z}}
+  if(!tg)return'';const dx=tg.x-P.x,dz=tg.z-P.z;return` -> ${DIRS[(Math.round(Math.atan2(dx,-dz)/(Math.PI/4))+8)%8]} ${Math.round(Math.hypot(dx,dz))} tiles`}
+const statStr=()=>`❤ ${S.hp}/${S.maxhp}   Lv ${S.lvl}   XP ${S.xp}/${S.lvl*20}   🪙 ${S.gold}\n📍 ${MAP.title}`;
+function questStr(){let t='';for(const q of CONFIG.quests){const st=S.q[q.id];if(!st||st.state=='done')continue;
+  const o=st.state=='ready'?`return to ${npcName(q.giver)}`:q.type=='kill'?`defeat ${q.target} ${st.prog}/${q.count}`:q.type=='collect'?`find ${q.item} ${st.prog}/${q.count}`:q.type=='talk'?`talk to ${npcName(q.target)}`:`go to ${q.where||'the marked area'}`;
+  t+=(t?'\n':'')+`${'★'.repeat(q.diff||1)} ${q.title}: ${o}${st.state=='ready'?'':hintFor(q)}`}
+  return t?'QUEST BOARD\n'+t:''}
 let lastTxt='';
-function hudStr(){let t=`❤ ${S.hp}/${S.maxhp}   Lv ${S.lvl}   XP ${S.xp}/${S.lvl*20}   🪙 ${S.gold}`;
-  for(const q of CONFIG.quests){const st=S.q[q.id];if(!st||st.state=='done')continue;
-    const o=st.state=='ready'?`return to ${npcName(q.giver)}`:q.type=='kill'?`defeat ${q.target} ${st.prog}/${q.count}`:q.type=='collect'?`find ${q.item} ${st.prog}/${q.count}`:q.type=='talk'?`talk to ${npcName(q.target)}`:`go to ${q.where||'the marked area'}`;
-    t+=`\n• ${q.title}: ${o}${q.map&&q.map!=MAP.name?' ('+CONFIG.maps[q.map].title+')':''}`}return t}
-function refresh(){const t=hudStr()+'|'+S.msg;if(t==lastTxt)return;lastTxt=t;
-  $('hud').textContent=hudStr();const m=$('msg');m.textContent=S.msg;m.style.display=S.msg&&!renderer.xr.isPresenting?'block':'none';
-  const c=pctx;c.clearRect(0,0,512,256);c.fillStyle='rgba(0,0,0,.65)';c.fillRect(0,0,512,256);c.fillStyle='#fff';c.font='20px sans-serif';let y=28;
-  const lines=(hudStr()+(S.msg?'\n\n'+S.msg:'')).split('\n');
-  for(const l of lines){let ln='';for(const w of l.split(' ')){if(c.measureText(ln+w).width>480){c.fillText(ln,16,y);y+=25;ln=''}ln+=w+' '}c.fillText(ln,16,y);y+=25}
-  ptex.needsUpdate=true}
+function refresh(){const a=statStr(),b=questStr(),t=a+'|'+b+'|'+S.msg;if(t==lastTxt)return;lastTxt=t;
+  $('hud').textContent=a;$('quests').textContent=b;
+  const m=$('msg');m.textContent=S.msg;m.style.display=S.msg?'block':'none';
+  paint(pnl,a+(S.msg?'\n\n'+S.msg:''));paint(qpn,b||'QUEST BOARD\nNo active quests.\nTalk to villagers marked with !')}
 setInterval(refresh,150);
 
 // ---- VR
-function applyMode(vr){const s=vr?Math.min(.07,1.5/Math.max(W,H)):1;exitBtn.visible=vr;world.scale.setScalar(s);world.position.set(vr?-W/2*s:0,vr?.75:0,vr?-1.1-H/2*s:0);
-  scene.background.set(vr?'#1b2a3a':(MAP.bg||'#9bd4f5'));panel.visible=vr;$('hud').style.display=vr?'none':'';lastTxt=''}
+function applyMode(vr){const s=vr?Math.min(.07,1.9/Math.max(W,H)):1;exitBtn.visible=vr;world.scale.setScalar(s);
+  world.position.set(vr?-W/2*s:0,vr?.75:0,vr?-1.1-H/2*s:0);
+  scene.background.set(vr?'#1b2a3a':(MAP.bg||'#9bd4f5'));pnl.m.visible=qpn.m.visible=vr;document.body.classList.toggle('vr',vr);lastTxt=''}
 // In-VR exit button: point a controller at it and pull the trigger
 const exitC=document.createElement('canvas');exitC.width=256;exitC.height=96;
 {const c=exitC.getContext('2d');c.fillStyle='#c0392b';c.fillRect(0,0,256,96);c.fillStyle='#fff';c.font='bold 44px sans-serif';c.textAlign='center';c.fillText('EXIT VR',128,62)}
 const exitBtn=new THREE.Mesh(new THREE.PlaneGeometry(.32,.12),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(exitC)}));
-exitBtn.position.set(.75,1.0,-.9);exitBtn.rotation.y=-.6;exitBtn.visible=false;scene.add(exitBtn);
+exitBtn.position.set(1.5,1.1,-1.0);exitBtn.rotation.y=-.9;exitBtn.visible=false;scene.add(exitBtn);
 const ray=new THREE.Raycaster(),rm=new THREE.Matrix4();
 const aimed=c=>{rm.identity().extractRotation(c.matrixWorld);ray.ray.origin.setFromMatrixPosition(c.matrixWorld);ray.ray.direction.set(0,0,-1).applyMatrix4(rm);return ray.intersectObject(exitBtn).length>0};
 [0,1].forEach(i=>{const c=renderer.xr.getController(i);
@@ -329,27 +481,57 @@ const aimed=c=>{rm.identity().extractRotation(c.matrixWorld);ray.ray.origin.setF
 const vb=$('vr');
 if(navigator.xr)navigator.xr.isSessionSupported('immersive-vr').then(ok=>{if(!ok){vb.style.opacity=.55;vb.title='VR not available on this device'}}).catch(()=>{});
 else{vb.style.opacity=.55;vb.title='WebXR not available in this browser'}
-vb.onclick=async()=>{const cur=renderer.xr.getSession();if(cur){cur.end();return}
+vb.onclick=async()=>{music.start();const cur=renderer.xr.getSession();if(cur){cur.end();return}
   if(!navigator.xr){say('WebXR is not available in this browser.');return}
   try{const s=await navigator.xr.requestSession('immersive-vr',{optionalFeatures:['local-floor','bounded-floor']});
     renderer.xr.setReferenceSpaceType('local-floor');await renderer.xr.setSession(s)}catch(e){say('Could not start VR: '+e.message)}};
 renderer.xr.addEventListener('sessionstart',()=>{vb.textContent='Exit VR';applyMode(true)});
 renderer.xr.addEventListener('sessionend',()=>{vb.textContent='Enter VR';applyMode(false)});
 
+// ---- Music: procedural WebAudio. Adventurous theme normally, suspenseful theme while enemies chase or hit you.
+const music=(()=>{let ac,adv,sus,master,on=true,started=false,combat=false,ta=0,ts=0,sa=0,ss=0;
+  const hz=m=>440*Math.pow(2,(m-69)/12);
+  function tone(bus,f,t,d,type,g){const o=ac.createOscillator(),v=ac.createGain();o.type=type;o.frequency.value=f;
+    v.gain.setValueAtTime(0,t);v.gain.linearRampToValueAtTime(g,t+.01);v.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(v);v.connect(bus);o.start(t);o.stop(t+d+.05)}
+  function thump(bus,t,g){const o=ac.createOscillator(),v=ac.createGain();o.frequency.setValueAtTime(110,t);o.frequency.exponentialRampToValueAtTime(40,t+.15);
+    v.gain.setValueAtTime(g,t);v.gain.exponentialRampToValueAtTime(.0001,t+.22);o.connect(v);v.connect(bus);o.start(t);o.stop(t+.25)}
+  const ROOT=[48,53,55,45],SCALE=[72,74,76,77,79,81,83,84],MEL=[0,2,4,2,5,4,2,1,0,2,4,5,7,5,4,2];
+  function advStep(t){const s=sa++,bar=Math.floor(s/8)%4,b=s%8;
+    if(b%2==0)tone(adv,hz(ROOT[bar]+(b==4?7:0)),t,.3,'triangle',.5);
+    tone(adv,hz(SCALE[MEL[s%16]]),t,b%2?.12:.2,'square',.07);
+    if(b==2||b==6)tone(adv,hz(ROOT[bar]+16),t,.1,'triangle',.12)}
+  const STING=[76,77,70,75,82];
+  function susStep(t){const s=ss++;
+    if(s%8==0||s%8==2)thump(sus,t,.9);
+    tone(sus,hz(s%2?33:34),t,.3,'sawtooth',.12);
+    if(s%6==3)tone(sus,hz(STING[(s*7)%5]),t,1.1,'sine',.1);
+    if(s%4==1)tone(sus,hz(57+(s%3)),t,.12,'square',.04)}
+  function tick(){const now=ac.currentTime;
+    while(ta<now+.3){if(ta<now)ta=now;advStep(ta);ta+=.2}
+    while(ts<now+.3){if(ts<now)ts=now;susStep(ts);ts+=.3}}
+  return{start(){if(started){if(ac.state=='suspended')ac.resume();return}started=true;
+      ac=new(window.AudioContext||window.webkitAudioContext)();master=ac.createGain();master.gain.value=on?.3:0;master.connect(ac.destination);
+      adv=ac.createGain();sus=ac.createGain();sus.gain.value=0;adv.connect(master);sus.connect(master);ta=ts=ac.currentTime+.1;setInterval(tick,90)},
+    set(c){if(!started||c==combat)return;combat=c;adv.gain.setTargetAtTime(c?0:1,ac.currentTime,.4);sus.gain.setTargetAtTime(c?1:0,ac.currentTime,.3)},
+    toggle(){on=!on;if(master)master.gain.setTargetAtTime(on?.3:0,ac.currentTime,.1);return on}}})();
+['pointerdown','keydown'].forEach(e=>addEventListener(e,()=>music.start()));
+$('mute').onclick=()=>{music.start();$('mute').textContent='♪ Music: '+(music.toggle()?'on':'off')};
+addEventListener('keydown',e=>{if(e.code=='KeyM')$('mute').click()});
+
 // ---- Main loop
 const camTarget=new THREE.Vector3();let last=0;
 function update(dt,t){
   const I=readInput(),cfg=CONFIG.player;
-  P.atk-=dt;P.inv-=dt;P.rcd-=dt;if(S.msgT>0&&(S.msgT-=dt)<=0){S.msg='';S.talk=false}
+  P.atk-=dt;P.inv-=dt;P.rcd-=dt;S.alert=Math.max(0,(S.alert||0)-dt);music.set(S.alert>0);if(S.msgT>0&&(S.msgT-=dt)<=0){S.msg='';S.talk=false}
   if(P.kx||P.kz){move(P,P.kx*dt,P.kz*dt);P.kx*=Math.pow(.001,dt);P.kz*=Math.pow(.001,dt);if(Math.abs(P.kx)+Math.abs(P.kz)<.1)P.kx=P.kz=0}
-  const mv=Math.hypot(I.x,I.z)>.05;
-  if(I.r&&P.roll<=0&&P.rcd<=0){if(mv)P.ang=Math.atan2(I.x,I.z);P.roll=.25;P.rcd=.6}
+  const mv=Math.hypot(I.x,I.z)>.05,sw=!!tileAt(Math.floor(P.x),Math.floor(P.z)).water,spd=sw?cfg.speed*.65:cfg.speed;
+  if(I.r&&P.roll<=0&&P.rcd<=0&&!sw){if(mv)P.ang=Math.atan2(I.x,I.z);P.roll=.25;P.rcd=.6}
   if(P.roll>0){P.roll-=dt;move(P,Math.sin(P.ang)*cfg.rollSpeed*dt,Math.cos(P.ang)*cfg.rollSpeed*dt)}
-  else if(mv){P.ang=Math.atan2(I.x,I.z);move(P,I.x*cfg.speed*dt,I.z*cfg.speed*dt)}
+  else if(mv){P.ang=Math.atan2(I.x,I.z);move(P,I.x*spd*dt,I.z*spd*dt)}
   if(I.a)attack();
   if(P.atk<.15)slash.visible=false;
   slash.position.set(P.x+Math.sin(P.ang),.5,P.z+Math.cos(P.ang));
-  P.m.position.set(P.x,mv?Math.abs(Math.sin(t*12))*.1:0,P.z);P.m.rotation.y=P.ang;P.m.scale.y=P.roll>0?.6:1;P.m.visible=P.inv<=0||Math.floor(t*20)%2==0;
+  P.m.position.set(P.x,sw?-.3+Math.sin(t*4)*.05:mv?Math.abs(Math.sin(t*12))*.1:0,P.z);rip.visible=sw;P.m.rotation.y=P.ang;P.m.scale.y=P.roll>0?.6:1;P.m.visible=P.inv<=0||Math.floor(t*20)%2==0;
   // portals
   for(const p of portals){p.g.children[1].scale.setScalar(1+.1*Math.sin(t*4));const on=Math.hypot(p.x-P.x,p.z-P.z)<.8;if(on&&!p.on){loadMap(p.to,p.toX,p.toY);return}p.on=on}
   // NPCs & interaction
@@ -370,7 +552,7 @@ function update(dt,t){
     if(e.hp<=0){if((e.rt-=dt)<=0){e.hp=e.d.hp;e.x=e.hx;e.z=e.hz;e.m.visible=true}continue}
     if(e.flash>0&&(e.flash-=dt)<=0)flashE(e,false);
     const dx=P.x-e.x,dz=P.z-e.z,dist=Math.hypot(dx,dz),sc=e.d.scale||1;let vx=0,vz=0;
-    if(dist<e.d.aggro){vx=dx/dist;vz=dz/dist}
+    if(dist<e.d.aggro){vx=dx/dist;vz=dz/dist;S.alert=3}
     else{if((e.wt-=dt)<=0){e.wt=1+Math.random()*2;const a=Math.random()*6.28;e.tx=e.hx+Math.cos(a)*2;e.tz=e.hz+Math.sin(a)*2}
       const wx=e.tx-e.x,wz=e.tz-e.z,wd=Math.hypot(wx,wz);if(wd>.2){vx=wx/wd*.4;vz=wz/wd*.4}}
     move(e,(vx*e.d.speed+e.kx)*dt,(vz*e.d.speed+e.kz)*dt);e.kx*=Math.pow(.001,dt);e.kz*=Math.pow(.001,dt);
