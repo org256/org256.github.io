@@ -824,11 +824,14 @@ function makeModel(n){
   return g}
 
 // ---- Articulated heroine (Part 2): hips, knees, shoulders, elbows, spine, head and ponytail are pivots driven by animRig().
+// Hierarchy: holder (moved by the game: position / facing / jump height) > flip (pivot at her WAIST: somersault + swim pitch) > roll (swim body roll) > root (the body).
+const PIV=.72;   // waist height = pivot for flips and for lying horizontal in the water
 function buildGirl(){
   const skin='#f1c9a0',jeans='#3b6ea8',tee='#e8554e',hair='#6b4226',green='#22c55e';
   const mesh=(g,c,x=0,y=0,z=0)=>{const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({color:c}));m.position.set(x,y,z);return m};
   const grp=(x=0,y=0,z=0)=>{const g=new THREE.Group();g.position.set(x,y,z);return g};
-  const root=grp(),R={root,ph:0,k:0,ka:0};
+  const holder=grp(),flip=grp(0,PIV,0),roll=grp(),root=grp(0,-PIV,0),R={root,flip,roll,ph:0,sp:0,k:0,ka:0,ks:0,kf:0};
+  holder.add(flip);flip.add(roll);roll.add(root);
   [-1,1].forEach(s=>{const n=s<0?'L':'R',hip=grp(s*.12,.62,0),knee=grp(0,-.3,0);
     hip.add(mesh(new THREE.CylinderGeometry(.1,.085,.3,10),jeans,0,-.15,0));                                   // thigh
     knee.add(mesh(new THREE.SphereGeometry(.088,8,8),jeans),mesh(new THREE.CylinderGeometry(.085,.07,.3,10),jeans,0,-.15,0),   // knee + shin
@@ -847,23 +850,37 @@ function buildGirl(){
     mesh(new THREE.SphereGeometry(.03,6,6),'#111',-.1,.02,.23),mesh(new THREE.SphereGeometry(.03,6,6),'#111',.1,.02,.23));
   const pony=grp(0,.1,-.27);R.pony=pony;head.add(pony);
   const tail=mesh(new THREE.ConeGeometry(.1,.5,8),hair,0,-.25,0);tail.rotation.x=Math.PI;pony.add(mesh(new THREE.SphereGeometry(.05,8,8),'#ff5fa2'),tail);   // ponytail on a hair tie
-  root.userData.rig=R;return root}
-// Run cycle: arms swing opposite the legs with ~90 degree elbows, knees fold on the swing, torso leans and twists, body bounces, ponytail sways.
-// Also: jump/tuck pose (arms up), swimming (slower, smaller), sword swing (right arm).  speed 0..1, atk = swing progress 0..1 or -1.
-function animRig(R,dt,speed,sw,air,atk){
-  R.k+=((speed>.05?1:0)-R.k)*Math.min(1,dt*10);R.ka+=((air?1:0)-R.ka)*Math.min(1,dt*14);
-  const a=R.k*Math.max(.45,speed)*(sw?.5:1),ka=R.ka;R.ph+=dt*(4.5+6*speed)*(sw?.55:1);
-  const p=R.ph,sn=Math.sin(p),lerp=(x,y,t)=>x+(y-x)*t;
+  holder.userData.rig=R;return holder}
+// Poses (blended): RUN (arms opposite legs, ~90 deg elbows, knees fold on the swing, torso lean + twist, bounce, ponytail sway),
+// JUMP (tucked legs, arms up), SOMERSAULT (forward flip about the waist, tucked), SWIM (front crawl: body horizontal, alternating
+// windmill arms with high-elbow recovery and underwater pull, 6-beat flutter kick, body roll, head turns to breathe), SWORD swing.
+// speed 0..1, atk = swing progress 0..1 or -1, fl = flip timer 1..0 (0 = not flipping).
+function animRig(R,dt,speed,sw,air,atk,fl){
+  const sm=(v,t,r)=>v+(t-v)*Math.min(1,dt*r),lerp=(x,y,t)=>x+(y-x)*t;
+  R.k=sm(R.k,speed>.05?1:0,10);R.ka=sm(R.ka,air?1:0,14);R.ks=sm(R.ks,sw?1:0,7);R.kf=sm(R.kf,fl>0?1:0,18);
+  const a=R.k*Math.max(.45,speed),ka=R.ka,ks=R.ks,kf=R.kf;
+  R.ph+=dt*(4.5+6*speed);R.sp+=dt*(2.4+4*speed);          // run phase, swim-stroke phase
+  const p=R.ph,sn=Math.sin(p),w=R.sp;
   const leg=q=>[-(.2+.75*Math.sin(q))*a,.1+(.15+1.2*Math.pow(Math.max(0,Math.cos(q)),1.5))*a];   // [thigh, knee] (negative thigh = forward)
   const [tl,kl]=leg(p),[tr,kr]=leg(p+Math.PI);
-  R.hipL.rotation.x=lerp(tl,-1,ka);R.kneeL.rotation.x=lerp(kl,1.4,ka);R.hipR.rotation.x=lerp(tr,-.15,ka);R.kneeR.rotation.x=lerp(kr,.9,ka);
-  R.shL.rotation.x=lerp((.8*sn-.1)*a,-2.4,ka);R.shR.rotation.x=lerp((-.8*sn-.1)*a,-2,ka);
-  R.elL.rotation.x=lerp(-(.15+(1.2-.25*sn)*a),-.4,ka);R.elR.rotation.x=lerp(-(.15+(1.2+.25*sn)*a),-.4,ka);
-  if(atk>=0){R.shR.rotation.x=-(1.4+1.1*Math.sin(atk*Math.PI));R.elR.rotation.x=-.3}
-  R.torso.rotation.x=.24*a*(1-ka)+.2*ka;R.torso.rotation.y=.3*sn*a*(1-ka);
-  R.head.rotation.x=-.18*a;R.head.rotation.y=-.2*sn*a;
-  R.pony.rotation.x=.4+.45*a*Math.sin(2*p+1)+.5*ka;R.pony.rotation.z=.2*sn*a;
-  R.root.position.y=.075*a*Math.abs(sn)*(1-ka)}
+  const J={hipL:tl,kneeL:kl,hipR:tr,kneeR:kr,shL:(.8*sn-.1)*a,shR:(-.8*sn-.1)*a,elL:-(.15+(1.2-.25*sn)*a),elR:-(.15+(1.2+.25*sn)*a)};
+  const mix=(T,t)=>{for(const k in T)J[k]=lerp(J[k],T[k],t)};
+  mix({hipL:-1,kneeL:1.4,hipR:-.15,kneeR:.9,shL:-2.4,shR:-2,elL:-.4,elR:-.4},ka);               // jump pose
+  mix({hipL:-1.6,kneeL:2.2,hipR:-1.6,kneeR:2.2,shL:-1,shR:-1,elL:-1.8,elR:-1.8},kf);           // tucked somersault
+  // front crawl. Body axis = local y, chest = local +z. Arm angle th: 0..PI = recovery (over the water, elbow high), PI..2PI = underwater pull.
+  const arm=th=>{th=((th%6.2832)+6.2832)%6.2832;return th<Math.PI?[th,-1.5*Math.sin(th)]:[th,.45*Math.sin(th)]};
+  const [sL,eL]=arm(w),[sR,eR]=arm(w+Math.PI);
+  const kick=q=>[.3*Math.sin(q),.25+.3*Math.max(0,Math.sin(q+1.2))];
+  const [kL,kkL]=kick(3*w),[kR,kkR]=kick(3*w+Math.PI);
+  mix({hipL:kL,kneeL:kkL,hipR:kR,kneeR:kkR,shL:sL,shR:sR,elL:eL,elR:eR},ks);
+  for(const k in J)R[k].rotation.x=J[k];
+  if(atk>=0&&ks<.5){R.shR.rotation.x=-(1.4+1.1*Math.sin(atk*Math.PI));R.elR.rotation.x=-.3}
+  R.torso.rotation.x=lerp(lerp(.24*a*(1-ka)+.2*ka,.7,kf),0,ks);R.torso.rotation.y=.3*sn*a*(1-ka)*(1-ks);
+  R.head.rotation.x=lerp(-.18*a,-.55,ks);R.head.rotation.y=lerp(-.2*sn*a,-.9*Math.max(0,Math.sin(w)),ks);   // swimmer looks ahead, turns to breathe
+  R.pony.rotation.x=lerp(.4+.45*a*Math.sin(2*p+1)+.5*ka,.15+.1*Math.sin(2*w),ks);R.pony.rotation.z=.2*sn*a*(1-ks);
+  R.roll.rotation.y=ks*-.6*Math.sin(w);                                                            // shoulder dips on the pulling side
+  R.flip.rotation.x=(fl>0?(1-fl)*6.2832:0)+ks*1.5708;                                              // forward somersault / lie flat, pivoting at the waist
+  R.root.position.y=-PIV+.075*a*Math.abs(sn)*(1-ka)*(1-ks)}
 
 // ---- Map
 let rows=[],W=1,H=1,MAP,PART=null;
@@ -1124,7 +1141,7 @@ function update(dt,t){
   if(I.a)attack();
   if(P.atk<.15)slash.visible=false;
   slash.position.set(P.x+Math.sin(P.ang),.5,P.z+Math.cos(P.ang));
-  P.m.position.set(P.x,(sw?-.3+Math.sin(t*4)*.05:mv&&!P.air&&!P.m.userData.rig?Math.abs(Math.sin(t*12))*.1:0)+P.h,P.z);P.m.rotation.x=P.fl>0?-(1-P.fl)*6.283:0;rip.visible=sw&&!P.air;if(P.m.userData.rig)animRig(P.m.userData.rig,dt,mv?Math.min(1,Math.hypot(I.x,I.z)):0,sw,P.air||P.roll>0,P.atk>0?1-P.atk/.3:-1);P.m.rotation.y=P.ang;P.m.scale.y=P.roll>0?.6:1;P.m.visible=P.inv<=0||Math.floor(t*20)%2==0;
+  const ks=P.m.userData.rig?P.m.userData.rig.ks:0;P.m.position.set(P.x,(sw?-.3+Math.sin(t*4)*.05:mv&&!P.air&&!P.m.userData.rig?Math.abs(Math.sin(t*12))*.1:0)+P.h-.62*ks,P.z);P.m.rotation.x=0;rip.visible=sw&&!P.air;rip.position.y=.3+.62*ks;if(P.m.userData.rig)animRig(P.m.userData.rig,dt,mv?Math.min(1,Math.hypot(I.x,I.z)):0,sw,P.air||P.roll>0,P.atk>0?1-P.atk/.3:-1,P.fl);P.m.rotation.y=P.ang;P.m.scale.y=P.roll>0?.6:1;P.m.visible=P.inv<=0||Math.floor(t*20)%2==0;
   // portals
   for(const p of portals){p.g.children[1].scale.setScalar(1+.1*Math.sin(t*4));const on=Math.hypot(p.x-P.x,p.z-P.z)<.8;if(on&&!p.on){loadMap(p.to,p.toX,p.toY);return}p.on=on}
   // NPCs & interaction
