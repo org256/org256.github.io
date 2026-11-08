@@ -1,0 +1,671 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Mrs Rosser's Stop Motion</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Figtree:wght@400;500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.js"></script>
+<style>
+/* Layout: one working column. Pick images, check the frame strip, set timing, make the video. */
+:root {
+  --bg: #f7f2f5;
+  --surface: #ffffff;
+  --fg: #2b1b16;
+  --muted: #6f5b61;
+  --line: #e3d7dd;
+  --accent: #6a2fa3;
+  --accent-fg: #ffffff;
+  --choc: #5b3420;
+  --choc-soft: #efe2da;
+  --ok: #1f7a4d;
+  --warn: #a4412c;
+  --font-display: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+  --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1c1217; --surface: #281a21; --fg: #f3e8ec; --muted: #b7a3ab; --line: #43303a;
+    --accent: #b88cf0; --accent-fg: #1c1217; --choc: #d9a98a; --choc-soft: #3a261e;
+    --ok: #62c796; --warn: #f09a85; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1c1217; --surface: #281a21; --fg: #f3e8ec; --muted: #b7a3ab; --line: #43303a;
+  --accent: #b88cf0; --accent-fg: #1c1217; --choc: #d9a98a; --choc-soft: #3a261e;
+  --ok: #62c796; --warn: #f09a85; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 16px/1.5 var(--font-body);
+  padding-block: 32px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+h1, h2 { font-family: var(--font-display); font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: 0.005em; }
+h1 { font-size: clamp(2rem, 6vw, 3.1rem); line-height: 1.05; color: var(--choc); }
+h2 { font-size: 1.25rem; }
+p { margin: 0; }
+.lede { color: var(--muted); max-width: 60ch; margin-top: 10px; }
+.eyebrow { font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 8px; }
+
+section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+
+.drop { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; justify-content: space-between;
+  border: 2px dashed var(--line); border-radius: 14px; padding: 20px; background: var(--surface); transition: border-color .15s, background .15s; }
+.drop.over { border-color: var(--accent); background: var(--choc-soft); }
+.drop p { color: var(--muted); max-width: 46ch; }
+.drop strong { color: var(--fg); font-weight: 600; }
+.btnrow { display: flex; flex-wrap: wrap; gap: 10px; }
+
+button, .btn {
+  font: 600 0.95rem var(--font-body); border-radius: 10px; padding: 10px 16px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+}
+button:hover, .btn:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+button.primary:hover { filter: brightness(1.08); }
+button:disabled { opacity: .5; cursor: not-allowed; filter: none; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+.settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field label { font-weight: 600; font-size: 0.9rem; }
+.field small { color: var(--muted); font-size: 0.8rem; }
+input[type="number"], select {
+  font: 500 1rem var(--font-body); color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; width: 100%; min-width: 0;
+}
+
+.strip-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px; }
+.strip-head .meta { color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.card canvas { width: 100%; height: auto; display: block; background: #000; }
+.card .info { padding: 8px 10px 4px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.chip { align-self: flex-start; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px; }
+.chip.slide { background: var(--accent); color: var(--accent-fg); }
+.chip.frame { background: var(--choc-soft); color: var(--choc); }
+.fname { font-size: 0.78rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tools { display: flex; gap: 4px; padding: 4px 8px 8px; }
+.tools button { padding: 3px 0; flex: 1; font-size: 0.85rem; border-radius: 8px; }
+.secs-row { display: flex; align-items: center; gap: 8px; padding: 2px 10px 4px; font-size: 0.8rem; color: var(--muted); }
+.secs-row label { font-weight: 600; white-space: nowrap; }
+.secs-row input { padding: 5px 8px; font-size: 0.9rem; border-radius: 8px; }
+.empty { border: 1px solid var(--line); border-radius: 14px; padding: 24px; color: var(--muted); background: var(--surface); }
+
+.make { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 18px; }
+.make .summary { flex: 1 1 280px; min-width: 0; }
+.big { font-family: var(--font-display); font-size: 1.5rem; font-variant-numeric: tabular-nums; color: var(--choc); }
+progress { width: 100%; height: 12px; accent-color: var(--accent); }
+.status { color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.status.err { color: var(--warn); }
+.status.ok { color: var(--ok); }
+video { width: 100%; max-height: 70vh; background: #000; border-radius: 12px; }
+.note { color: var(--muted); font-size: 0.85rem; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Claymation, but quicker</div>
+    <h1>Mrs Rosser's Stop Motion</h1>
+    <p class="lede">Turn a folder of photos into a video. The first images hold long enough to read, and the rest play as a stop motion at 5 frames per second. The last image holds for 15 seconds at the end. Everything runs in your browser, so your photos stay on your computer.</p>
+  </header>
+
+  <section aria-labelledby="h-add">
+    <h2 id="h-add">1. Add your images</h2>
+    <div class="drop" id="drop">
+      <p><strong>Drop images here</strong> or choose them. They are put in file name order, so IMG_2 comes before IMG_10.</p>
+      <div class="btnrow">
+        <button class="primary" id="pick-files" type="button">Choose images</button>
+        <button id="pick-folder" type="button">Choose a folder</button>
+      </div>
+      <input class="sr" id="in-files" type="file" accept="image/*" multiple aria-label="Choose images">
+      <input class="sr" id="in-folder" type="file" webkitdirectory multiple aria-label="Choose a folder of images">
+    </div>
+    <div class="status" id="load-status" role="status" aria-live="polite"></div>
+  </section>
+
+  <section aria-labelledby="h-set">
+    <h2 id="h-set">2. Set the timing</h2>
+    <div class="panel settings">
+      <div class="field">
+        <label for="o-slides">Text slides at the start</label>
+        <input id="o-slides" type="number" min="0" max="20" step="1" value="2">
+        <small>Shown full time, not rotated.</small>
+      </div>
+      <div class="field">
+        <label for="o-secs">Default seconds per text slide</label>
+        <input id="o-secs" type="number" min="1" max="60" step="0.5" value="6">
+        <small>Each text slide starts with this. You can change a slide's own time under its picture in step 3.</small>
+      </div>
+      <div class="field">
+        <label for="o-fps">Stop motion frames per second</label>
+        <input id="o-fps" type="number" min="1" max="30" step="1" value="5">
+        <small>Every other image shows at this speed.</small>
+      </div>
+      <div class="field">
+        <label for="o-rot">Rotate the stop motion images</label>
+        <select id="o-rot">
+          <option value="0" selected>Don't rotate</option>
+          <option value="90">90° clockwise</option>
+          <option value="270">90° anticlockwise</option>
+          <option value="180">180° (upside down)</option>
+        </select>
+        <small>Text slides stay as they are.</small>
+      </div>
+      <div class="field">
+        <label for="o-hold">Hold the last image (seconds)</label>
+        <input id="o-hold" type="number" min="0" max="120" step="1" value="15">
+        <small>Keeps the final picture on screen at the end. Use 0 for no hold.</small>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-strip">
+    <div class="strip-head">
+      <h2 id="h-strip">3. Check the order</h2>
+      <div class="meta" id="strip-meta"></div>
+    </div>
+    <div class="btnrow">
+      <button id="sort-name" type="button" disabled>Sort by file name</button>
+      <button id="clear" type="button" disabled>Clear all</button>
+    </div>
+    <div id="strip"></div>
+  </section>
+
+  <section aria-labelledby="h-make">
+    <h2 id="h-make">4. Make the video</h2>
+    <div class="panel make">
+      <div class="summary">
+        <div class="big" id="runtime">0:00</div>
+        <div class="status" id="plan-text">Add images to see the running time.</div>
+      </div>
+      <button class="primary" id="make" type="button" disabled>Make video</button>
+    </div>
+    <progress id="prog" max="1" value="0" hidden></progress>
+    <div class="status" id="make-status" role="status" aria-live="polite"></div>
+    <div id="result" hidden>
+      <video id="player" controls playsinline></video>
+      <div class="btnrow" style="margin-top:12px">
+        <button class="primary" id="save" type="button">Save video</button>
+      </div>
+      <p class="note" id="save-note" style="margin-top:8px"></p>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var OUT_FPS = 30;
+  var THUMB_W = 240;
+  var $ = function (s) { return document.querySelector(s); };
+  var items = [];
+  var nextId = 1;
+  var busy = false;
+  var resultBlob = null;
+  var resultName = "charlie-stop-motion.mp4";
+  var resultUrl = null;
+  var downloads = null;
+  var collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+  try {
+    if (window.claude && window.claude.use) {
+      window.claude.use("downloads").then(function (d) { downloads = d; }).catch(function () {});
+    }
+  } catch (e) {}
+
+  function opts() {
+    var slides = Math.max(0, Math.min(20, parseInt($("#o-slides").value, 10) || 0));
+    var secs = Math.max(1, parseFloat($("#o-secs").value) || 6);
+    var fps = Math.max(1, Math.min(30, parseFloat($("#o-fps").value) || 5));
+    var rot = parseInt($("#o-rot").value, 10) || 0;
+    var hold = parseFloat($("#o-hold").value);
+    if (isNaN(hold)) hold = 0;
+    hold = Math.max(0, Math.min(120, hold));
+    return { slides: Math.min(slides, items.length), secs: secs, fps: fps, rot: rot, hold: hold };
+  }
+
+
+  function slideSecs(it, o) { return it.secs != null ? it.secs : o.secs; }
+
+  function fmtTime(s) {
+    var m = Math.floor(s / 60);
+    var r = Math.round(s - m * 60);
+    if (r === 60) { m += 1; r = 0; }
+    return m + ":" + String(r).padStart(2, "0");
+  }
+
+  /* Draw src into a W x H canvas, rotated by rot degrees clockwise, fitted on black. */
+  function drawFit(ctx, src, sw, sh, W, H, rot) {
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, W, H);
+    var turned = rot % 180 !== 0;
+    var w = turned ? sh : sw, h = turned ? sw : sh;
+    var s = Math.min(W / w, H / h);
+    ctx.save();
+    ctx.translate(W / 2, H / 2);
+    ctx.rotate(rot * Math.PI / 180);
+    ctx.drawImage(src, -sw * s / 2, -sh * s / 2, sw * s, sh * s);
+    ctx.restore();
+  }
+
+  function outSize() {
+    var it = items[0];
+    var s = Math.min(1, 1920 / Math.max(it.w, it.h));
+    var W = Math.max(2, Math.round(it.w * s / 2) * 2);
+    var H = Math.max(2, Math.round(it.h * s / 2) * 2);
+    return [W, H];
+  }
+
+  /* Works out how many video frames each image gets. The last image also holds for o.hold seconds. */
+  function plan() {
+    var o = opts();
+    var t = 0;
+    var out = items.map(function (it, i) {
+      var slide = i < o.slides;
+      var d = slide ? slideSecs(it, o) : 1 / o.fps;
+      var a = Math.round(t * OUT_FPS), b = Math.round((t + d) * OUT_FPS);
+      t += d;
+      return { item: it, rot: slide ? 0 : o.rot, count: Math.max(1, b - a) };
+    });
+    if (out.length) out[out.length - 1].count += Math.round(o.hold * OUT_FPS);
+    return out;
+  }
+
+  /* ---------- Loading images ---------- */
+  function isHeic(f) {
+    return /image\/hei[cf]/i.test(f.type) || /\.(heic|heif)$/i.test(f.name);
+  }
+  var heicLib = null;
+  function loadHeicLib() {
+    if (window.heic2any) return Promise.resolve();
+    if (!heicLib) {
+      heicLib = new Promise(function (res, rej) {
+        var s = document.createElement("script");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/heic2any/0.0.4/heic2any.min.js";
+        s.onload = res;
+        s.onerror = function () { heicLib = null; rej(new Error("The HEIC converter didn't load")); };
+        document.head.appendChild(s);
+      });
+    }
+    return heicLib;
+  }
+  async function convertHeic(f) {
+    await loadHeicLib();
+    var out = await window.heic2any({ blob: f, toType: "image/jpeg", quality: 0.92 });
+    return Array.isArray(out) ? out[0] : out;
+  }
+
+  async function addFiles(list) {
+    var files = Array.prototype.slice.call(list).filter(function (f) {
+      return /^image\//.test(f.type) || /\.(jpe?g|png|webp|gif|bmp|avif|heic|heif)$/i.test(f.name);
+    }).sort(function (a, b) { return collator.compare(a.name, b.name); });
+    if (!files.length) {
+      setLoad("No image files found. JPG, PNG, HEIC, WebP, GIF and BMP files work.", true);
+      return;
+    }
+    var failed = [];
+    for (var i = 0; i < files.length; i++) {
+      setLoad("Reading image " + (i + 1) + " of " + files.length + "…");
+      try {
+        var file = files[i];
+        var bmp;
+        try {
+          bmp = await createImageBitmap(file);
+        } catch (err) {
+          if (!isHeic(file)) throw err;
+          setLoad("Converting HEIC image " + (i + 1) + " of " + files.length + ". This takes a few seconds each…");
+          file = await convertHeic(file);
+          bmp = await createImageBitmap(file);
+        }
+        var sc = Math.min(1, THUMB_W / bmp.width);
+        var c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(bmp.width * sc));
+        c.height = Math.max(1, Math.round(bmp.height * sc));
+        c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+        items.push({ id: nextId++, name: files[i].name, file: file, w: bmp.width, h: bmp.height, thumb: c });
+        bmp.close();
+      } catch (e) {
+        failed.push(files[i].name);
+      }
+    }
+    if (failed.length) {
+      setLoad("Added " + (files.length - failed.length) + " images. Couldn't read: " + failed.slice(0, 5).join(", ") + (failed.length > 5 ? " and " + (failed.length - 5) + " more" : "") + ".", true);
+    } else {
+      setLoad("Added " + files.length + " image" + (files.length === 1 ? "" : "s") + ".", false, true);
+    }
+    render();
+  }
+
+  function setLoad(msg, err, ok) {
+    var el = $("#load-status");
+    el.textContent = msg;
+    el.className = "status" + (err ? " err" : ok ? " ok" : "");
+  }
+
+  /* ---------- Rendering the frame strip ---------- */
+  function render() {
+    var strip = $("#strip");
+    strip.innerHTML = "";
+    var o = opts();
+    $("#sort-name").disabled = items.length < 2 || busy;
+    $("#clear").disabled = !items.length || busy;
+    $("#make").disabled = !items.length || busy;
+
+    if (!items.length) {
+      strip.innerHTML = '<div class="empty">Your images will appear here in the order they play. The first ones become text slides, the rest become stop motion frames.</div>';
+      $("#strip-meta").textContent = "";
+      $("#runtime").textContent = "0:00";
+      $("#plan-text").textContent = "Add images to see the running time.";
+      return;
+    }
+
+    var W = 240, H = Math.max(1, Math.round(W * items[0].h / items[0].w));
+    var grid = document.createElement("div");
+    grid.className = "grid";
+    items.forEach(function (it, i) {
+      var slide = i < o.slides;
+      var rot = slide ? 0 : o.rot;
+      var card = document.createElement("div");
+      card.className = "card";
+      var cv = document.createElement("canvas");
+      cv.width = W; cv.height = H;
+      cv.setAttribute("role", "img");
+      cv.setAttribute("aria-label", it.name);
+      drawFit(cv.getContext("2d"), it.thumb, it.thumb.width, it.thumb.height, W, H, rot);
+      card.appendChild(cv);
+
+      var info = document.createElement("div");
+      info.className = "info";
+      var chip = document.createElement("span");
+      chip.className = "chip " + (slide ? "slide" : "frame");
+      chip.textContent = slide ? "Text slide " + (i + 1) : "Frame " + (i - o.slides + 1);
+      var fn = document.createElement("span");
+      fn.className = "fname";
+      fn.textContent = it.name;
+      fn.title = it.name;
+      info.appendChild(chip); info.appendChild(fn);
+      card.appendChild(info);
+
+      if (slide) {
+        var row = document.createElement("div");
+        row.className = "secs-row";
+        var sid = "secs-" + it.id;
+        var sl = document.createElement("label");
+        sl.htmlFor = sid;
+        sl.textContent = "Seconds";
+        var si = document.createElement("input");
+        si.type = "number"; si.id = sid; si.min = "1"; si.max = "120"; si.step = "0.5";
+        si.value = String(slideSecs(it, o));
+        si.placeholder = String(o.secs);
+        si.setAttribute("aria-label", "Seconds to show text slide " + (i + 1));
+        si.addEventListener("input", function () {
+          var v = parseFloat(si.value);
+          if (isNaN(v) || v < 1) delete it.secs;
+          else it.secs = Math.min(120, v);
+          clearResult();
+          updatePlan();
+        });
+        row.appendChild(sl); row.appendChild(si);
+        card.appendChild(row);
+      }
+
+      var tools = document.createElement("div");
+      tools.className = "tools";
+      [["◀", "Move earlier", -1], ["▶", "Move later", 1], ["✕", "Remove", 0]].forEach(function (b) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = b[0];
+        btn.setAttribute("aria-label", b[1] + ": " + it.name);
+        btn.disabled = busy || (b[2] === -1 && i === 0) || (b[2] === 1 && i === items.length - 1);
+        btn.addEventListener("click", function () {
+          if (b[2] === 0) items.splice(i, 1);
+          else { var t = items[i]; items[i] = items[i + b[2]]; items[i + b[2]] = t; }
+          clearResult();
+          render();
+        });
+        tools.appendChild(btn);
+      });
+      card.appendChild(tools);
+      grid.appendChild(card);
+    });
+    strip.appendChild(grid);
+    updatePlan();
+  }
+
+
+  function updatePlan() {
+    if (!items.length) return;
+    var o = opts();
+    var frames = items.length - o.slides;
+    var slideTimes = items.slice(0, o.slides).map(function (it) { return slideSecs(it, o); });
+    var slideTotal = slideTimes.reduce(function (a, b) { return a + b; }, 0);
+    var sameTime = slideTimes.every(function (x) { return x === slideTimes[0]; });
+    var total = slideTotal + frames / o.fps + o.hold;
+    $("#runtime").textContent = fmtTime(total);
+    var parts = [];
+    if (o.slides) parts.push(o.slides + " text slide" + (o.slides === 1 ? "" : "s") + (sameTime ? " × " + slideTimes[0] + " s" : " with their own times"));
+    if (frames) parts.push(frames + " frame" + (frames === 1 ? "" : "s") + " at " + o.fps + " per second" + (o.rot ? ", rotated " + (o.rot === 270 ? "90° anticlockwise" : o.rot + "° clockwise") : ""));
+    if (o.hold) parts.push("last image held for " + o.hold + " s");
+    $("#plan-text").textContent = parts.join(" + ");
+    $("#strip-meta").textContent = items.length + " image" + (items.length === 1 ? "" : "s");
+  }
+
+  function clearResult() {
+    resultBlob = null;
+    if (resultUrl) { URL.revokeObjectURL(resultUrl); resultUrl = null; }
+    $("#result").hidden = true;
+    $("#player").removeAttribute("src");
+    $("#make-status").textContent = "";
+    $("#make-status").className = "status";
+  }
+
+  /* ---------- Encoding ---------- */
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  async function loadFull(file) {
+    return await createImageBitmap(file);
+  }
+
+  async function encodeMp4(p, W, H, onProgress) {
+    var codecs = ["avc1.640028", "avc1.640033", "avc1.4D0028", "avc1.42E01F"];
+    var bitrate = Math.round(Math.min(16e6, Math.max(2e6, W * H * OUT_FPS * 0.08)));
+    var cfg = null;
+    for (var c = 0; c < codecs.length && !cfg; c++) {
+      var test = { codec: codecs[c], width: W, height: H, bitrate: bitrate, framerate: OUT_FPS };
+      try {
+        var r = await VideoEncoder.isConfigSupported(test);
+        if (r && r.supported) cfg = test;
+      } catch (e) {}
+    }
+    if (!cfg) throw new Error("no-h264");
+
+
+    var muxOpts = {
+      target: new Mp4Muxer.ArrayBufferTarget(),
+      video: { codec: "avc", width: W, height: H },
+      fastStart: "in-memory"
+    };
+    var muxer = new Mp4Muxer.Muxer(muxOpts);
+    var encErr = null;
+    var enc = new VideoEncoder({
+      output: function (chunk, meta) { muxer.addVideoChunk(chunk, meta); },
+      error: function (e) { encErr = e; }
+    });
+    enc.configure(cfg);
+
+
+    var canvas = document.createElement("canvas");
+    canvas.width = W; canvas.height = H;
+    var ctx = canvas.getContext("2d");
+    var idx = 0;
+    var step = Math.round(1e6 / OUT_FPS);
+
+    for (var i = 0; i < p.length; i++) {
+      var bmp = await loadFull(p[i].item.file);
+      drawFit(ctx, bmp, bmp.width, bmp.height, W, H, p[i].rot);
+      bmp.close();
+      for (var k = 0; k < p[i].count; k++) {
+        if (encErr) throw encErr;
+        var vf = new VideoFrame(canvas, { timestamp: Math.round(idx * 1e6 / OUT_FPS), duration: step });
+        enc.encode(vf, { keyFrame: idx % OUT_FPS === 0 });
+        vf.close();
+        idx++;
+        while (enc.encodeQueueSize > 8) await wait(4);
+      }
+      onProgress((i + 1) / p.length, "Encoding image " + (i + 1) + " of " + p.length);
+    }
+    await enc.flush();
+    if (encErr) throw encErr;
+    muxer.finalize();
+    enc.close();
+    return new Blob([muxer.target.buffer], { type: "video/mp4" });
+  }
+
+  /* Fallback for browsers without H.264 encoding: records in real time to WebM. */
+  async function encodeWebm(p, W, H, onProgress) {
+    var canvas = document.createElement("canvas");
+    canvas.width = W; canvas.height = H;
+    var ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+    var stream = canvas.captureStream(OUT_FPS);
+    var mime = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].filter(function (m) { return window.MediaRecorder && MediaRecorder.isTypeSupported(m); })[0];
+    if (!mime) throw new Error("no-recorder");
+    var rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8e6 });
+    var chunks = [];
+    rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+    var done = new Promise(function (res) { rec.onstop = res; });
+    rec.start(500);
+    var start = performance.now();
+    var t = 0;
+    for (var i = 0; i < p.length; i++) {
+      var d = p[i].count / OUT_FPS;
+      var bmp = await loadFull(p[i].item.file);
+      drawFit(ctx, bmp, bmp.width, bmp.height, W, H, p[i].rot);
+      bmp.close();
+      t += d;
+      var remain = start + t * 1000 - performance.now();
+      var until = performance.now() + Math.max(0, remain);
+      while (performance.now() < until) {
+        await wait(Math.min(250, until - performance.now()));
+        onProgress(Math.min(1, (performance.now() - start) / 1000 / (t + 0.001) * (i + 1) / p.length), "Recording image " + (i + 1) + " of " + p.length);
+      }
+    }
+    await wait(300);
+    rec.stop();
+    await done;
+    stream.getTracks().forEach(function (tr) { tr.stop(); });
+    return new Blob(chunks, { type: "video/webm" });
+  }
+
+  async function makeVideo() {
+    if (!items.length || busy) return;
+    busy = true;
+    clearResult();
+    render();
+    var prog = $("#prog");
+    var st = $("#make-status");
+    prog.hidden = false; prog.value = 0;
+    st.className = "status"; st.textContent = "Starting…";
+    var onProgress = function (f, msg) { prog.value = f; st.textContent = msg; };
+    try {
+      var size = outSize();
+      var p = plan();
+      var blob, ext;
+      var canMp4 = typeof VideoEncoder !== "undefined" && typeof VideoFrame !== "undefined" && window.Mp4Muxer;
+      if (canMp4) {
+        try {
+          blob = await encodeMp4(p, size[0], size[1], onProgress);
+          ext = "mp4";
+        } catch (e) {
+          if (e && e.message === "no-h264" || String(e && e.message).indexOf("Unsupported") >= 0) { blob = null; }
+          else throw e;
+        }
+      }
+      if (!blob) {
+        st.textContent = "This browser can't make MP4 files, so it will record a WebM video in real time instead. Keep this tab open.";
+        await wait(1200);
+        blob = await encodeWebm(p, size[0], size[1], onProgress);
+        ext = "webm";
+      }
+      resultBlob = blob;
+      resultName = "charlie-stop-motion." + ext;
+      resultUrl = URL.createObjectURL(blob);
+      var pl = $("#player");
+      pl.src = resultUrl;
+      $("#result").hidden = false;
+      $("#save").hidden = !downloads;
+      $("#save-note").textContent = downloads
+        ? "Saved as " + resultName + " (" + (blob.size / 1048576).toFixed(1) + " MB)."
+        : "Right-click the video and choose Save video as…";
+      st.className = "status ok";
+      st.textContent = "Done. " + fmtTime(p.reduce(function (a, x) { return a + x.count; }, 0) / OUT_FPS) + " long, " + size[0] + " × " + size[1] + ".";
+      prog.value = 1;
+    } catch (e) {
+      st.className = "status err";
+      st.textContent = "The video couldn't be made: " + (e && e.message ? e.message : "unknown error") + ". Try fewer or smaller images.";
+    } finally {
+      busy = false;
+      prog.hidden = true;
+      render();
+    }
+  }
+
+  async function saveVideo() {
+    if (!resultBlob || !downloads) return;
+    var note = $("#save-note");
+    try {
+      await downloads.save({ filename: resultName, data: resultBlob });
+      note.textContent = "Video saved.";
+    } catch (e) {
+      var code = e && e.code;
+      if (code === "declined") note.textContent = "Save cancelled. Press Save video to try again.";
+      else if (code === "too_large") note.textContent = "The file is too large to save from here. Try fewer images.";
+      else { note.textContent = "Saving isn't available in this view. Right-click the video and choose Save video as…"; $("#save").hidden = true; }
+    }
+  }
+
+  /* ---------- Wiring ---------- */
+  $("#pick-files").addEventListener("click", function () { $("#in-files").click(); });
+  $("#pick-folder").addEventListener("click", function () { $("#in-folder").click(); });
+  ["#in-files", "#in-folder"].forEach(function (sel) {
+    $(sel).addEventListener("change", function (e) {
+      var f = e.target.files;
+      if (f && f.length) { clearResult(); addFiles(f); }
+      e.target.value = "";
+    });
+  });
+  var drop = $("#drop");
+  ["dragenter", "dragover"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("over"); });
+  });
+  ["dragleave", "drop"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("over"); });
+  });
+  drop.addEventListener("drop", function (e) {
+    var f = e.dataTransfer && e.dataTransfer.files;
+    if (f && f.length) { clearResult(); addFiles(f); }
+  });
+  ["#o-slides", "#o-secs", "#o-fps", "#o-rot", "#o-hold"].forEach(function (sel) {
+    $(sel).addEventListener("input", function () { clearResult(); render(); });
+  });
+  $("#sort-name").addEventListener("click", function () {
+    items.sort(function (a, b) { return collator.compare(a.name, b.name); });
+    clearResult(); render();
+  });
+  $("#clear").addEventListener("click", function () {
+    items = []; clearResult(); setLoad(""); render();
+  });
+  $("#make").addEventListener("click", makeVideo);
+  $("#save").addEventListener("click", saveVideo);
+  render();
+})();
+</script>
+
+</body></html>

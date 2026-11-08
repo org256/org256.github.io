@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HEIC to JPG Batch Converter</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#fff; --text:#1c1f24; --muted:#6a7280; --line:#e2e5ea;
+    --accent:#2563eb; --accent-text:#fff; --ok:#16a34a; --err:#dc2626; --track:#e5e7eb;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#14161a; --card:#1d2026; --text:#eceff4; --muted:#98a1b0; --line:#2c313a;
+      --accent:#4c8dff; --accent-text:#07111f; --ok:#4ade80; --err:#f87171; --track:#2c313a;
+      color-scheme: dark;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:24px}
+  .wrap{max-width:720px;margin:0 auto}
+  h1{font-size:22px;margin:0 0 4px}
+  p.sub{margin:0 0 20px;color:var(--muted)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:16px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  button{font:inherit;border:0;border-radius:8px;padding:10px 16px;cursor:pointer;background:var(--accent);color:var(--accent-text);font-weight:600}
+  button.secondary{background:transparent;color:var(--text);border:1px solid var(--line)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  label{display:flex;align-items:center;gap:8px;color:var(--text)}
+  .opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:14px}
+  input[type=range]{width:140px}
+  input[type=number]{width:64px;font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text)}
+  .bar{height:10px;background:var(--track);border-radius:99px;overflow:hidden;margin:10px 0}
+  .bar>div{height:100%;width:0;background:var(--accent);transition:width .1s}
+  .stats{display:flex;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:14px}
+  .stats b{color:var(--text)}
+  .muted{color:var(--muted)}
+  #log{max-height:200px;overflow:auto;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;margin-top:10px}
+  #log div{padding:2px 0;color:var(--err)}
+  .hidden{display:none}
+  .warn{color:var(--err)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>HEIC to JPG converter</h1>
+  <p class="sub">Converts every HEIC file in a folder using parallel workers. Everything runs locally in your browser; no files are uploaded.</p>
+
+  <div id="unsupported" class="card warn hidden">
+    This browser cannot write to folders. Please open this file in Chrome, Edge, or another Chromium based browser.
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <button id="pick">Choose folder and convert</button>
+      <button id="cancel" class="secondary hidden">Cancel</button>
+    </div>
+    <p class="muted" style="margin:10px 0 0">JPGs are saved in a new <code>converted-jpg</code> folder inside the folder you choose. Your originals are not touched.</p>
+
+    <div class="opts">
+      <label>Quality <input type="range" id="quality" min="50" max="100" value="90"> <span id="qv">90</span>%</label>
+      <label>Workers <input type="number" id="workers" min="1" max="32"></label>
+      <label><input type="checkbox" id="recursive" checked> Include subfolders</label>
+      <label><input type="checkbox" id="skip" checked> Skip already converted</label>
+    </div>
+  </div>
+
+  <div class="card hidden" id="progress">
+    <div id="status">Scanning folder…</div>
+    <div class="bar"><div id="fill"></div></div>
+    <div class="stats">
+      <span>Done <b id="sDone">0</b> / <b id="sTotal">0</b></span>
+      <span>Speed <b id="sSpeed">0</b> files/s</span>
+      <span>Skipped <b id="sSkip">0</b></span>
+      <span>Failed <b id="sFail">0</b></span>
+      <span>Elapsed <b id="sTime">0:00</b></span>
+    </div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const LIBHEIF_URL = "https://cdn.jsdelivr.net/npm/libheif-js@1.18.2/libheif-wasm/libheif-bundle.js";
+
+// ---- Worker source: decodes HEIC (native decoder if available, else libheif WASM) and encodes JPEG
+const workerSrc = `
+let L = null, native = true, ready = null;
+function init(){
+  if (!ready) ready = (async () => {
+    importScripts(${JSON.stringify(LIBHEIF_URL)});
+    let l = libheif();
+    if (l && typeof l.then === "function") l = await l;
+    L = l;
+  })();
+  return ready;
+}
+async function decodeHeif(buf){
+  await init();
+  const dec = new L.HeifDecoder();
+  const imgs = dec.decode(new Uint8Array(buf));
+  if (!imgs || !imgs.length) throw new Error("No image found in file");
+  const img = imgs[0];
+  const w = img.get_width(), h = img.get_height();
+  const idata = new ImageData(w, h);
+  return new Promise((res, rej) => img.display(idata, r => r ? res(r) : rej(new Error("HEIC decode failed"))));
+}
+self.onmessage = async (e) => {
+  const { id, buf, quality } = e.data;
+  try {
+    let canvas, ctx;
+    let bmp = null;
+    if (native) {
+      try { bmp = await createImageBitmap(new Blob([buf], { type: "image/heic" })); }
+      catch (_) { native = false; }
+    }
+    if (bmp) {
+      canvas = new OffscreenCanvas(bmp.width, bmp.height);
+      ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, bmp.width, bmp.height);
+      ctx.drawImage(bmp, 0, 0);
+      bmp.close();
+    } else {
+      const idata = await decodeHeif(buf);
+      canvas = new OffscreenCanvas(idata.width, idata.height);
+      ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, idata.width, idata.height);
+      const tmp = new OffscreenCanvas(idata.width, idata.height);
+      tmp.getContext("2d").putImageData(idata, 0, 0);
+      ctx.drawImage(tmp, 0, 0);
+    }
+    const blob = await canvas.convertToBlob({ type: "image/jpeg", quality });
+    const out = await blob.arrayBuffer();
+    self.postMessage({ id, out }, [out]);
+  } catch (err) {
+    self.postMessage({ id, error: String(err && err.message || err) });
+  }
+};`;
+const workerUrl = URL.createObjectURL(new Blob([workerSrc], { type: "text/javascript" }));
+
+// ---- UI
+const $ = id => document.getElementById(id);
+const pickBtn = $("pick"), cancelBtn = $("cancel");
+$("workers").value = Math.max(2, Math.min(16, (navigator.hardwareConcurrency || 4) - 1));
+$("quality").addEventListener("input", e => $("qv").textContent = e.target.value);
+if (!window.showDirectoryPicker) { $("unsupported").classList.remove("hidden"); pickBtn.disabled = true; }
+
+const isHeic = n => /\.(heic|heif)$/i.test(n);
+const fmtTime = s => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,"0")}`;
+
+async function* walk(dir, recursive, skipName) {
+  for await (const [name, h] of dir.entries()) {
+    if (h.kind === "file" && isHeic(name)) yield { handle: h, name, parent: dir };
+    else if (h.kind === "directory" && recursive && name !== skipName) yield* walk(h, true, skipName);
+  }
+}
+
+let cancelled = false;
+cancelBtn.onclick = () => { cancelled = true; cancelBtn.disabled = true; $("status").textContent = "Cancelling…"; };
+
+pickBtn.onclick = async () => {
+  let root;
+  try { root = await window.showDirectoryPicker({ mode: "readwrite" }); }
+  catch (_) { return; }
+
+  const OUT = "converted-jpg";
+  const quality = +$("quality").value / 100;
+  const nWorkers = Math.max(1, Math.min(32, +$("workers").value || 4));
+  const recursive = $("recursive").checked, skipExisting = $("skip").checked;
+
+  cancelled = false;
+  pickBtn.disabled = true; cancelBtn.disabled = false; cancelBtn.classList.remove("hidden");
+  $("progress").classList.remove("hidden");
+  $("log").innerHTML = "";
+  let done = 0, skipped = 0, failed = 0, total = 0, scanning = true;
+  const t0 = performance.now();
+  const upd = () => {
+    const secs = (performance.now() - t0) / 1000;
+    $("sDone").textContent = done; $("sTotal").textContent = total + (scanning ? "+" : "");
+    $("sSkip").textContent = skipped; $("sFail").textContent = failed;
+    $("sSpeed").textContent = (done / Math.max(secs, .001)).toFixed(1);
+    $("sTime").textContent = fmtTime(secs);
+    $("fill").style.width = (total ? ((done + skipped + failed) / total * 100) : 0) + "%";
+  };
+  const timer = setInterval(upd, 250);
+  $("status").textContent = "Converting…";
+
+  let outRoot;
+  try { outRoot = await root.getDirectoryHandle(OUT, { create: true }); }
+  catch (e) { $("status").textContent = "Could not create output folder: " + e.message; clearInterval(timer); pickBtn.disabled = false; cancelBtn.classList.add("hidden"); return; }
+
+  // Output folder cache so subfolder structure is mirrored
+  const outDirs = new Map();
+  const outDirFor = async (parent) => {
+    if (parent === root) return outRoot;
+    const path = (await root.resolve(parent)) || [];
+    const key = path.join("/");
+    if (!outDirs.has(key)) {
+      outDirs.set(key, (async () => {
+        let d = outRoot;
+        for (const p of path) d = await d.getDirectoryHandle(p, { create: true });
+        return d;
+      })());
+    }
+    return outDirs.get(key);
+  };
+
+  // Job queue fed by the folder scan so conversion starts immediately
+  const queue = []; let waiters = [];
+  const push = j => { queue.push(j); const w = waiters.shift(); if (w) w(); };
+  const next = async () => {
+    while (!queue.length) {
+      if (!scanning) return null;
+      await new Promise(r => waiters.push(r));
+    }
+    return queue.shift();
+  };
+  (async () => {
+    try {
+      for await (const f of walk(root, recursive, OUT)) {
+        if (cancelled) break;
+        total++; push(f);
+      }
+    } finally {
+      scanning = false; waiters.splice(0).forEach(w => w()); upd();
+    }
+  })();
+
+  const lane = async () => {
+    const worker = new Worker(workerUrl);
+    let msgId = 0;
+    const run = (buf) => new Promise((res, rej) => {
+      const id = ++msgId;
+      worker.onmessage = e => e.data.error ? rej(new Error(e.data.error)) : res(e.data.out);
+      worker.onerror = e => rej(new Error(e.message || "Worker error"));
+      worker.postMessage({ id, buf, quality }, [buf]);
+    });
+    try {
+      for (;;) {
+        if (cancelled) break;
+        const job = await next();
+        if (!job) break;
+        try {
+          const outName = job.name.replace(/\.(heic|heif)$/i, ".jpg");
+          const dir = await outDirFor(job.parent);
+          if (skipExisting) {
+            try { await dir.getFileHandle(outName); skipped++; continue; } catch (_) {}
+          }
+          const file = await job.handle.getFile();
+          const jpg = await run(await file.arrayBuffer());
+          const fh = await dir.getFileHandle(outName, { create: true });
+          const w = await fh.createWritable();
+          await w.write(jpg); await w.close();
+          done++;
+        } catch (e) {
+          failed++;
+          const d = document.createElement("div");
+          d.textContent = `${job.name}: ${e.message}`;
+          $("log").appendChild(d);
+        }
+      }
+    } finally { worker.terminate(); }
+  };
+
+  await Promise.all(Array.from({ length: nWorkers }, lane));
+  clearInterval(timer); scanning = false; upd();
+  const secs = (performance.now() - t0) / 1000;
+  $("status").textContent = cancelled
+    ? `Cancelled. Converted ${done} files.`
+    : (total === 0 ? "No HEIC files found in that folder."
+      : `Finished: ${done} converted, ${skipped} skipped, ${failed} failed in ${fmtTime(secs)}.`);
+  pickBtn.disabled = false; cancelBtn.classList.add("hidden");
+};
+</script>
+</body>
+</html>
